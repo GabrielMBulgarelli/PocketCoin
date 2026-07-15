@@ -58,6 +58,25 @@ class TransactionSource(StrEnum):
     PLANNED_PAYMENT = "planned_payment"
 
 
+class PlannedPaymentStatus(StrEnum):
+    PENDING = "pending"
+    PAID = "paid"
+    CANCELLED = "cancelled"
+
+
+class PlannedPaymentRecurrence(StrEnum):
+    NONE = "none"
+    WEEKLY = "weekly"
+    MONTHLY = "monthly"
+    YEARLY = "yearly"
+
+
+class ImportBatchStatus(StrEnum):
+    PENDING = "pending"
+    COMMITTED = "committed"
+    EXPIRED = "expired"
+
+
 class FinancialAccount(Base):
     __tablename__ = "financial_accounts"
     __table_args__ = (CheckConstraint("opening_balance_minor >= 0"),)
@@ -177,6 +196,87 @@ class Transaction(Base):
     import_batch_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     source: Mapped[TransactionSource] = mapped_column(
         Enum(TransactionSource, native_enum=False), nullable=False, default=TransactionSource.MANUAL
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now
+    )
+
+
+class ImportBatch(Base):
+    __tablename__ = "import_batches"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    filename: Mapped[str] = mapped_column(String(255), nullable=False)
+    file_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    status: Mapped[ImportBatchStatus] = mapped_column(
+        Enum(ImportBatchStatus, native_enum=False),
+        nullable=False,
+        default=ImportBatchStatus.PENDING,
+        index=True,
+    )
+    imported_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    skipped_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    failed_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class Budget(Base):
+    __tablename__ = "budgets"
+    __table_args__ = (
+        CheckConstraint("limit_minor > 0"),
+        Index("uq_budgets_category_month", "category_id", "month", unique=True),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    category_id: Mapped[int] = mapped_column(
+        ForeignKey("categories.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
+    month: Mapped[date] = mapped_column(Date, nullable=False, index=True)
+    limit_minor: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now
+    )
+
+
+class PlannedPayment(Base):
+    __tablename__ = "planned_payments"
+    __table_args__ = (CheckConstraint("amount_minor > 0"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    financial_account_id: Mapped[int | None] = mapped_column(
+        ForeignKey("financial_accounts.id", ondelete="RESTRICT"), nullable=True, index=True
+    )
+    category_id: Mapped[int | None] = mapped_column(
+        ForeignKey("categories.id", ondelete="RESTRICT"), nullable=True, index=True
+    )
+    title: Mapped[str] = mapped_column(String(250), nullable=False)
+    direction: Mapped[CategoryDirection] = mapped_column(
+        Enum(CategoryDirection, native_enum=False), nullable=False
+    )
+    amount_minor: Mapped[int] = mapped_column(Integer, nullable=False)
+    due_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
+    status: Mapped[PlannedPaymentStatus] = mapped_column(
+        Enum(PlannedPaymentStatus, native_enum=False), nullable=False,
+        default=PlannedPaymentStatus.PENDING, index=True
+    )
+    recurrence: Mapped[PlannedPaymentRecurrence] = mapped_column(
+        Enum(PlannedPaymentRecurrence, native_enum=False), nullable=False,
+        default=PlannedPaymentRecurrence.NONE
+    )
+    is_debt_payment: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    notes: Mapped[str | None] = mapped_column(String(2_000), nullable=True)
+    last_paid_due_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    last_transaction_id: Mapped[int | None] = mapped_column(
+        ForeignKey("transactions.id", ondelete="SET NULL"), nullable=True
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=utc_now

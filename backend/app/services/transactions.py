@@ -1,5 +1,8 @@
+import csv
+import io
 from dataclasses import dataclass
 from datetime import date
+from decimal import Decimal
 from uuid import uuid4
 
 from sqlalchemy import or_, select
@@ -10,6 +13,7 @@ from app.models import (
     Category,
     CategoryDirection,
     FinancialAccount,
+    Tag,
     Transaction,
     TransactionKind,
     TransactionSource,
@@ -27,6 +31,29 @@ class TransactionInput:
     transaction_date: date
     description: str
     notes: str | None = None
+    tag_ids: list[int] | None = None
+    source: TransactionSource = TransactionSource.MANUAL
+
+
+def _set_tags(session: Session, transaction: Transaction, tag_ids: list[int] | None) -> None:
+    if tag_ids is None:
+        return
+    unique_ids = list(dict.fromkeys(tag_ids))
+    tags = (
+        list(session.scalars(select(Tag).where(Tag.id.in_(unique_ids), Tag.is_active)))
+        if unique_ids
+        else []
+    )
+    if len(tags) != len(unique_ids):
+        raise DomainValidationError("One or more tags are unavailable.", "tag_ids")
+    session.execute(
+        transaction_tags.delete().where(transaction_tags.c.transaction_id == transaction.id)
+    )
+    if unique_ids:
+        session.execute(
+            transaction_tags.insert(),
+            [{"transaction_id": transaction.id, "tag_id": tag_id} for tag_id in unique_ids],
+        )
 
 
 @dataclass(frozen=True)
@@ -71,9 +98,11 @@ def create_transaction(session: Session, data: TransactionInput) -> Transaction:
         transaction_date=data.transaction_date,
         description=normalized_name(data.description),
         notes=data.notes,
+        source=data.source,
     )
     session.add(transaction)
     session.flush()
+    _set_tags(session, transaction, data.tag_ids)
     return transaction
 
 
@@ -113,10 +142,7 @@ def create_transfer(session: Session, data: TransferInput) -> tuple[Transaction,
     return outgoing, incoming
 
 
-def list_transactions(
-    session: Session,
-    limit: int = 50,
-    offset: int = 0,
+def transaction_statement(
     financial_account_id: int | None = None,
     category_id: int | None = None,
     kind: TransactionKind | None = None,
@@ -125,9 +151,7 @@ def list_transactions(
     end_date: date | None = None,
     tag_id: int | None = None,
     sort: str = "date_desc",
-) -> list[Transaction]:
-    if not 1 <= limit <= 200 or offset < 0:
-        raise DomainValidationError("Invalid transaction pagination.")
+):
     statement = select(Transaction)
     if financial_account_id is not None:
         statement = statement.where(Transaction.financial_account_id == financial_account_id)
@@ -158,8 +182,122 @@ def list_transactions(
     }.get(sort)
     if ordering is None:
         raise DomainValidationError("Invalid transaction sort.", "sort")
-    statement = statement.order_by(*ordering).limit(limit).offset(offset)
+    return statement.order_by(*ordering)
+
+
+def list_transactions(
+    session: Session,
+    limit: int = 50,
+    offset: int = 0,
+    financial_account_id: int | None = None,
+    category_id: int | None = None,
+    kind: TransactionKind | None = None,
+    search: str | None = None,
+    start_date: date | None = None,
+    end_date: date | None = None,
+    tag_id: int | None = None,
+    sort: str = "date_desc",
+) -> list[Transaction]:
+    if not 1 <= limit <= 200 or offset < 0:
+        raise DomainValidationError("Invalid transaction pagination.")
+    statement = transaction_statement(
+        financial_account_id,
+        category_id,
+        kind,
+        search,
+        start_date,
+        end_date,
+        tag_id,
+        sort,
+    ).limit(limit).offset(offset)
     return list(session.scalars(statement))
+
+
+def _spreadsheet_safe(value: str | None) -> str:
+    if value is None:
+        return ""
+    if value.startswith(("\t", "\r")) or value.lstrip().startswith(("=", "+", "-", "@")):
+        return f"'{value}"
+    return value
+
+
+def export_transactions_csv(
+    session: Session,
+    currency: str,
+    financial_account_id: int | None = None,
+    category_id: int | None = None,
+    kind: TransactionKind | None = None,
+    search: str | None = None,
+    start_date: date | None = None,
+    end_date: date | None = None,
+    tag_id: int | None = None,
+    sort: str = "date_asc",
+) -> tuple[bytes, str]:
+    rows = list(
+        session.scalars(
+            transaction_statement(
+                financial_account_id,
+                category_id,
+                kind,
+                search,
+                start_date,
+                end_date,
+                tag_id,
+                sort,
+            )
+        )
+    )
+    account_names = {
+        account.id: account.name for account in session.scalars(select(FinancialAccount))
+    }
+    category_names = {category.id: category.name for category in session.scalars(select(Category))}
+    tags_by_transaction: dict[int, list[str]] = {row.id: [] for row in rows}
+    if rows:
+        tag_rows = session.execute(
+            select(transaction_tags.c.transaction_id, Tag.name)
+            .join(Tag, Tag.id == transaction_tags.c.tag_id)
+            .where(transaction_tags.c.transaction_id.in_([row.id for row in rows]))
+            .order_by(transaction_tags.c.transaction_id, Tag.name)
+        )
+        for transaction_id, name in tag_rows:
+            tags_by_transaction.setdefault(transaction_id, []).append(name)
+
+    output = io.StringIO(newline="")
+    writer = csv.writer(output)
+    writer.writerow(
+        [
+            "transaction_id",
+            "date",
+            "kind",
+            "amount",
+            "currency",
+            "description",
+            "notes",
+            "account",
+            "category",
+            "tags",
+            "source",
+            "external_id",
+        ]
+    )
+    for row in rows:
+        writer.writerow(
+            [
+                row.id,
+                row.transaction_date.isoformat(),
+                row.kind.value,
+                f"{Decimal(row.amount_minor) / Decimal(100):.2f}",
+                currency,
+                _spreadsheet_safe(row.description),
+                _spreadsheet_safe(row.notes),
+                _spreadsheet_safe(account_names.get(row.financial_account_id, "")),
+                _spreadsheet_safe(category_names.get(row.category_id, "")),
+                _spreadsheet_safe(", ".join(tags_by_transaction.get(row.id, []))),
+                row.source.value,
+                _spreadsheet_safe(row.external_id),
+            ]
+        )
+    return ("\ufeff" + output.getvalue()).encode("utf-8"), "pocketcoin-transactions.csv"
 
 
 def get_transaction(session: Session, transaction_id: int) -> Transaction:
@@ -183,6 +321,7 @@ def update_transaction(session: Session, transaction_id: int, **values: object) 
         transaction_date=values.get("transaction_date", transaction.transaction_date),
         description=str(values.get("description", transaction.description)),
         notes=values.get("notes", transaction.notes),
+        tag_ids=values.get("tag_ids"),
     )
     _account(session, data.financial_account_id)
     _category(session, data.category_id, data.kind)
@@ -190,6 +329,7 @@ def update_transaction(session: Session, transaction_id: int, **values: object) 
         setattr(transaction, field, value)
     transaction.description = normalized_name(transaction.description)
     session.flush()
+    _set_tags(session, transaction, data.tag_ids)
     return transaction
 
 

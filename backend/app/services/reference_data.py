@@ -10,6 +10,8 @@ from app.models import (
     Category,
     CategoryDirection,
     FinancialAccount,
+    PlannedPayment,
+    PlannedPaymentStatus,
     Tag,
     Theme,
 )
@@ -171,6 +173,15 @@ def update_financial_account(
     account = session.get(FinancialAccount, account_id)
     if account is None:
         raise NotFoundError("Financial account not found.")
+    if values.get("is_active") is False and session.scalar(
+        select(PlannedPayment.id).where(
+            PlannedPayment.financial_account_id == account_id,
+            PlannedPayment.status == PlannedPaymentStatus.PENDING,
+        ).limit(1)
+    ) is not None:
+        raise DomainValidationError(
+            "Financial account is referenced by a pending planned payment.", "is_active"
+        )
     if "name" in values:
         account.name = normalized_name(str(values["name"]))
     for field in {

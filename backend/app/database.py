@@ -1,5 +1,6 @@
 from collections.abc import Generator
 from pathlib import Path
+from threading import Lock
 from typing import Any
 
 from sqlalchemy import Engine, create_engine, event
@@ -30,8 +31,9 @@ def create_database_engine(url: str | None = None) -> Engine:
 
 engine = create_database_engine()
 SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
+database_maintenance_lock = Lock()
 
 
 def get_session() -> Generator[Session]:
-    with SessionLocal() as session:
+    with database_maintenance_lock, SessionLocal() as session:
         yield session
