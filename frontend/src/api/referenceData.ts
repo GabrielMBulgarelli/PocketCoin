@@ -1,5 +1,5 @@
-export type FinancialAccount = { id: number; name: string; kind: string; is_active: boolean };
-export type Category = { id: number; name: string; direction: "income" | "expense"; is_active: boolean };
+export type FinancialAccount = { id: number; name: string; kind: string; opening_balance_minor: number; opening_balance_date: string; credit_limit_minor: number | null; is_active: boolean };
+export type Category = { id: number; name: string; direction: "income" | "expense"; is_default: boolean; is_active: boolean };
 export type Tag = { id: number; name: string; is_active: boolean };
 
 import { getApiErrorMessage } from "./error";

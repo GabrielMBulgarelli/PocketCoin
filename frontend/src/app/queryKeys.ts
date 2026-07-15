@@ -8,4 +8,6 @@ export const queryKeys = {
   plannedPayments: ["planned-payments"] as const,
   dashboard: ["dashboard"] as const,
   reports: ["reports"] as const,
+  imports: ["imports"] as const,
+  backups: ["backups"] as const,
 };
