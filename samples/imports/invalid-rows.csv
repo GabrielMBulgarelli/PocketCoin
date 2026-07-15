@@ -1,0 +1,6 @@
+Date,Description,Debit,Credit,Category,External ID
+not-a-date,Coffee,4.50,,Everyday,bad-date
+2026-07-04,,not-money,,Everyday,bad-amount
+2026-07-05,Conflict,5.00,8.00,Everyday,conflict
+2026-07-06,Duplicate,3.00,,Everyday,same-id
+2026-07-06,Duplicate,3.00,,Everyday,same-id
