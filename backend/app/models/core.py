@@ -82,7 +82,7 @@ class Category(Base):
     __table_args__ = (
         Index(
             "uq_categories_active_name_direction",
-            func.lower("name"),
+            func.lower(text("name")),
             "direction",
             unique=True,
             sqlite_where=text("is_active = 1"),
@@ -109,7 +109,7 @@ class Tag(Base):
     __table_args__ = (
         Index(
             "uq_tags_active_name",
-            func.lower("name"),
+            func.lower(text("name")),
             unique=True,
             sqlite_where=text("is_active = 1"),
         ),
