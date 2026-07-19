@@ -19,7 +19,7 @@ const dashboardData = {
   forecast: { forecast_start: "2026-07-13", forecast_end: "2026-08-12", lookback_start: "2026-04-15", lookback_end: "2026-07-13", lookback_days: 90, horizon_days: 30, starting_balance_minor: 0, planned_income_minor: 0, planned_expense_minor: 0, expected_unplanned_spending_minor: 0, ending_balance_minor: 0, historical_expense_minor: 0, historical_transaction_count: 0, average_daily_expense_minor: 0, assumptions: [] },
   creditUtilization: { has_liability_accounts: false, has_credit_accounts: false, outstanding_debt_minor: 0, total_credit_limit_minor: 0, utilization_percentage: null },
   creditAccounts: [], recurringDebts: { items: [], monthly_total_minor: 0 }, debtToIncome: { monthly_debt_minor: 0, gross_income_minor: 0, ratio_percentage: null },
-  cashFlow: [], comparison: [], categories: [], structure: [], recent: [], upcoming: [],
+  cashFlow: [], cashTable: { period_days: 18, income: { count: 2, total_minor: 300_000, daily_average_minor: 16_667, average_transaction_minor: 150_000 }, expense: { count: 3, total_minor: 180_000, daily_average_minor: 10_000, average_transaction_minor: 60_000 }, net_minor: 120_000, previous_income_minor: 250_000, previous_expense_minor: 170_000, previous_net_minor: 80_000, net_change_minor: 40_000 }, comparison: [], categories: [], structure: [], recent: [], upcoming: [],
 };
 
 const endpointData: Record<string, unknown> = {
@@ -30,6 +30,7 @@ const endpointData: Record<string, unknown> = {
   "recurring-debts": dashboardData.recurringDebts,
   "debt-to-income": dashboardData.debtToIncome,
   "cash-flow": dashboardData.cashFlow,
+  "cash-flow-table": dashboardData.cashTable,
   "period-comparison": dashboardData.comparison,
   "category-spending": dashboardData.categories,
   "expense-structure": dashboardData.structure,
@@ -75,7 +76,7 @@ describe("DashboardView date-dependent queries", () => {
 
   it("keeps successful cards visible when one dashboard endpoint fails", async () => {
     vi.mocked(getDashboardEndpoint).mockImplementation(async (path) => {
-      if (path === "cash-flow") throw new Error("cash flow failed");
+      if (path === "cash-flow-table") throw new Error("cash flow failed");
       return endpointData[path];
     });
 
@@ -84,5 +85,45 @@ describe("DashboardView date-dependent queries", () => {
     expect(await screen.findByText("Cash flow unavailable")).toBeInTheDocument();
     expect(screen.getByText("Balance")).toBeInTheDocument();
     expect(screen.getAllByText(/CRC|₡/).length).toBeGreaterThan(0);
+  });
+
+  it("uses the cash-flow table summary instead of the time-series endpoint", async () => {
+    renderDashboard();
+
+    expect(await screen.findByRole("region", { name: "Cash flow" })).toBeInTheDocument();
+    expect(getDashboardEndpoint).toHaveBeenCalledWith(
+      "cash-flow-table",
+      expect.any(Object),
+      {},
+    );
+    expect(getDashboardEndpoint).not.toHaveBeenCalledWith(
+      "cash-flow",
+      expect.any(Object),
+      expect.anything(),
+    );
+  });
+
+  it("defaults period comparison to expenses", async () => {
+    renderDashboard();
+
+    expect(await screen.findByRole("radio", { name: "Expenses" })).toBeChecked();
+    await waitFor(() => expect(getDashboardEndpoint).toHaveBeenCalledWith(
+      "period-comparison",
+      expect.any(Object),
+      { metric: "expenses" },
+    ));
+  });
+
+  it("requests a new period comparison when its metric changes", async () => {
+    renderDashboard();
+    const income = await screen.findByRole("radio", { name: "Income" });
+
+    fireEvent.click(income);
+
+    await waitFor(() => expect(getDashboardEndpoint).toHaveBeenCalledWith(
+      "period-comparison",
+      expect.any(Object),
+      { metric: "income" },
+    ));
   });
 });

@@ -16,7 +16,8 @@ import {
   AlertDialogTitle,
 } from "../../components/ui/alert-dialog";
 import { Button } from "../../components/ui/button";
-import { Card, control } from "../dashboard/DashboardCards";
+import { control } from "../dashboard/DashboardCards";
+import { DashboardCard } from "../dashboard/DashboardCard";
 
 function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -44,7 +45,7 @@ function DataSafetyCard({ locale }: { locale: string }) {
   });
 
   return (
-    <Card title="Data safety" context="Backups stay inside PocketCoin's local data directory">
+    <DashboardCard title="Data safety" description="Backups stay inside PocketCoin's local data directory">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="max-w-xl text-sm text-muted-foreground">
           Create a consistent SQLite backup before risky changes. Restoring also keeps an automatic
@@ -149,7 +150,7 @@ function DataSafetyCard({ locale }: { locale: string }) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </Card>
+    </DashboardCard>
   );
 }
 
@@ -160,14 +161,14 @@ export function SettingsView({ settings, loading, loadError }: { settings?: Sett
   const [exportError, setExportError] = useState("");
   useEffect(() => { if (settings && !form) setForm(settings); }, [settings, form]);
   const mutation = useMutation({ mutationFn: updateSettings, onSuccess: (saved, submitted) => { const formattingChanged = settings?.base_currency !== submitted.base_currency || settings?.locale !== submitted.locale; client.setQueryData(queryKeys.settings, saved); void client.invalidateQueries({ queryKey: queryKeys.settings }); if (formattingChanged) { void client.invalidateQueries({ queryKey: queryKeys.dashboard }); void client.invalidateQueries({ queryKey: queryKeys.reports }); } setForm(saved); setMessage("Settings saved."); } });
-  if (loading) return <Card title="Loading settings" context="Local preferences"><p className="py-16 text-center text-sm text-muted-foreground" role="status">Loading preferences…</p></Card>;
-  if (loadError || !form) return <Card title="Settings unavailable" context="Local preferences"><p className="py-16 text-center text-sm text-destructive" role="alert">The local settings could not be loaded.</p></Card>;
+  if (loading) return <DashboardCard title="Loading settings" description="Local preferences"><p className="py-16 text-center text-sm text-muted-foreground" role="status">Loading preferences…</p></DashboardCard>;
+  if (loadError || !form) return <DashboardCard title="Settings unavailable" description="Local preferences"><p className="py-16 text-center text-sm text-destructive" role="alert">The local settings could not be loaded.</p></DashboardCard>;
   const currencyValid = /^[A-Za-z]{3}$/.test(form.base_currency); let localeValid = true; try { Intl.getCanonicalLocales(form.locale); } catch { localeValid = false; }
-  return <div className="grid gap-5 xl:grid-cols-[2fr_1fr]"><Card title="Display preferences" context="Saved in your local PocketCoin database"><form className="grid gap-4 sm:grid-cols-2" onSubmit={(event) => { event.preventDefault(); setMessage(""); if (currencyValid && localeValid) mutation.mutate({ ...form, base_currency: form.base_currency.toUpperCase() }); }}>
+  return <div className="grid gap-5 xl:grid-cols-[2fr_1fr]"><DashboardCard title="Display preferences" description="Saved in your local PocketCoin database"><form className="grid gap-4 sm:grid-cols-2" onSubmit={(event) => { event.preventDefault(); setMessage(""); if (currencyValid && localeValid) mutation.mutate({ ...form, base_currency: form.base_currency.toUpperCase() }); }}>
     <label className="grid gap-1 text-sm font-medium">Currency<input list="currency-presets" className={control} value={form.base_currency} onChange={(event) => setForm({ ...form, base_currency: event.target.value })} /><datalist id="currency-presets"><option value="CRC" /><option value="USD" /><option value="EUR" /></datalist>{!currencyValid && <span className="text-xs text-destructive">Use a three-letter currency code.</span>}</label>
     <label className="grid gap-1 text-sm font-medium">Locale<input list="locale-presets" className={control} value={form.locale} onChange={(event) => setForm({ ...form, locale: event.target.value })} /><datalist id="locale-presets"><option value="es-CR" /><option value="en-US" /></datalist>{!localeValid && <span className="text-xs text-destructive">Enter a valid BCP 47 locale tag.</span>}</label>
     <label className="grid gap-1 text-sm font-medium">First day of week<select className={control} value={form.first_day_of_week} onChange={(event) => setForm({ ...form, first_day_of_week: event.target.value as Settings["first_day_of_week"] })}><option value="monday">Monday</option><option value="sunday">Sunday</option></select></label>
     <label className="grid gap-1 text-sm font-medium">Theme<select className={control} value={form.theme} onChange={(event) => setForm({ ...form, theme: event.target.value as Settings["theme"] })}><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
     <div className="sm:col-span-2"><button disabled={mutation.isPending || !currencyValid || !localeValid} className="h-10 rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground disabled:opacity-50" type="submit">{mutation.isPending ? "Saving…" : "Save settings"}</button>{mutation.isError && <p className="mt-2 text-sm text-destructive" role="alert">{mutation.error.message}</p>}{message && <p className="mt-2 text-sm text-muted-foreground" role="status">{message}</p>}</div>
-  </form></Card><Card title="Full transaction export" context="Every ledger row in a spreadsheet-safe CSV"><p className="mb-4 text-sm text-muted-foreground">The export uses {form.base_currency.toUpperCase()} and includes all dates, accounts, categories, tags, and transfers.</p><button className="h-10 rounded-lg border bg-background px-4 text-sm font-medium" type="button" onClick={() => { setExportError(""); void exportTransactions().catch((error: Error) => setExportError(error.message)); }}>Export full history</button>{exportError && <p className="mt-2 text-sm text-destructive" role="alert">{exportError}</p>}</Card><div className="xl:col-span-2"><DataSafetyCard locale={form.locale} /></div></div>;
+  </form></DashboardCard><DashboardCard title="Full transaction export" description="Every ledger row in a spreadsheet-safe CSV"><p className="mb-4 text-sm text-muted-foreground">The export uses {form.base_currency.toUpperCase()} and includes all dates, accounts, categories, tags, and transfers.</p><button className="h-10 rounded-lg border bg-background px-4 text-sm font-medium" type="button" onClick={() => { setExportError(""); void exportTransactions().catch((error: Error) => setExportError(error.message)); }}>Export full history</button>{exportError && <p className="mt-2 text-sm text-destructive" role="alert">{exportError}</p>}</DashboardCard><div className="xl:col-span-2"><DataSafetyCard locale={form.locale} /></div></div>;
 }

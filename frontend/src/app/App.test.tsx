@@ -51,6 +51,27 @@ function stubApi() {
                 savings_minor: 0,
                 savings_rate: null,
               }
+            : url.includes("/api/dashboard/cash-flow-table")
+              ? {
+                  period_days: 1,
+                  income: {
+                    count: 0,
+                    total_minor: 0,
+                    daily_average_minor: 0,
+                    average_transaction_minor: 0,
+                  },
+                  expense: {
+                    count: 0,
+                    total_minor: 0,
+                    daily_average_minor: 0,
+                    average_transaction_minor: 0,
+                  },
+                  net_minor: 0,
+                  previous_income_minor: 0,
+                  previous_expense_minor: 0,
+                  previous_net_minor: 0,
+                  net_change_minor: 0,
+                }
             : url.includes("/api/dashboard/credit-utilization")
               ? {
                   has_liability_accounts: false,
