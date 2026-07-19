@@ -51,6 +51,12 @@ export function useAnalyticsViewState(route: AnalyticsRoute, defaultMetric: Comp
   const [initial] = useState(() => readHash(route, defaultMetric));
   const [filters, setFilters] = useState<DashboardFilters>(initial.filters);
   const [metric, setMetric] = useState<ComparisonMetric>(initial.metric);
+  const [effective, setEffective] = useState(initial);
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => setEffective({ filters, metric }), 200);
+    return () => window.clearTimeout(timeout);
+  }, [filters, metric]);
 
   useEffect(() => {
     if (hashPath() !== route) return;
@@ -77,5 +83,6 @@ export function useAnalyticsViewState(route: AnalyticsRoute, defaultMetric: Comp
     setMetric(defaultMetric);
   }, [defaultMetric]);
 
-  return { filters, metric, setFilters, setMetric, reset };
+  const isUpdating = filters !== effective.filters || metric !== effective.metric;
+  return { filters, metric, effectiveFilters: effective.filters, effectiveMetric: effective.metric, isUpdating, setFilters, setMetric, reset };
 }

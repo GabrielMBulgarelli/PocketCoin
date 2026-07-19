@@ -1,4 +1,4 @@
-import { getApiErrorMessage } from "./error";
+import { apiGet, apiJson } from "./client";
 
 export type Settings = {
   base_currency: string;
@@ -7,14 +7,8 @@ export type Settings = {
   theme: "system" | "light" | "dark";
 };
 
-export async function getSettings(): Promise<Settings> {
-  const response = await fetch("/api/settings");
-  if (!response.ok) throw new Error(await getApiErrorMessage(response));
-  return response.json() as Promise<Settings>;
-}
+export const getSettings = (signal?: AbortSignal) => apiGet<Settings>("/api/settings", { signal });
 
 export async function updateSettings(settings: Settings): Promise<Settings> {
-  const response = await fetch("/api/settings", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify(settings) });
-  if (!response.ok) throw new Error(await getApiErrorMessage(response));
-  return response.json() as Promise<Settings>;
+  return apiJson<Settings>("/api/settings", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify(settings) });
 }

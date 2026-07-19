@@ -2,12 +2,15 @@ export type HealthResponse = {
   status: "ok";
 };
 
-export async function getHealth(): Promise<HealthResponse> {
-  const response = await fetch("/api/health");
-
-  if (!response.ok) {
-    throw new Error("The local API did not respond successfully.");
+export async function getHealth(signal?: AbortSignal): Promise<HealthResponse> {
+  try {
+    const health = await apiGet<HealthResponse>("/api/health", { signal });
+    reportApiAvailable();
+    return health;
+  } catch (error) {
+    reportApiUnavailable();
+    throw error;
   }
-
-  return (await response.json()) as HealthResponse;
 }
+import { apiGet } from "./client";
+import { reportApiAvailable, reportApiUnavailable } from "./healthState";

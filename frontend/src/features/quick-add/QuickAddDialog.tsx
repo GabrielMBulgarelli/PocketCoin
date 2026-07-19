@@ -5,6 +5,7 @@ import { getCategories, getFinancialAccounts, getTags } from "../../api/referenc
 import { createTransaction, createTransfer } from "../../api/transactions";
 import { createPlannedPayment, type PaymentDirection, type PaymentRecurrence } from "../../api/plannedPayments";
 import { queryKeys } from "../../app/queryKeys";
+import { invalidateFinancialQueries, mutationInvalidations } from "../../app/invalidateQueries";
 import { localDateValue } from "../../lib/format";
 import { Button } from "../../components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "../../components/ui/dialog";
@@ -24,9 +25,9 @@ export function QuickAddDialog({ open, onOpenChange, onCreated }: Props) {
   const [error, setError] = useState("");
   const needsCategories = mode !== "transfer";
   const supportsTags = mode === "expense" || mode === "income";
-  const accounts = useQuery({ queryKey: queryKeys.financialAccounts, queryFn: getFinancialAccounts, enabled: open });
-  const categories = useQuery({ queryKey: queryKeys.categories, queryFn: getCategories, enabled: open && needsCategories });
-  const tags = useQuery({ queryKey: queryKeys.tags, queryFn: getTags, enabled: open && supportsTags });
+  const accounts = useQuery({ queryKey: queryKeys.financialAccounts, queryFn: ({ signal }) => getFinancialAccounts(signal), enabled: open });
+  const categories = useQuery({ queryKey: queryKeys.categories, queryFn: ({ signal }) => getCategories(signal), enabled: open && needsCategories });
+  const tags = useQuery({ queryKey: queryKeys.tags, queryFn: ({ signal }) => getTags(signal), enabled: open && supportsTags });
   const mutation = useMutation({
     mutationFn: async () => {
       const amountMinor = Math.round(Number(values.amount) * 100);
@@ -43,8 +44,7 @@ export function QuickAddDialog({ open, onOpenChange, onCreated }: Props) {
       return createTransaction({ ...shared, kind: mode, financial_account_id: Number(values.accountId), category_id: Number(values.categoryId), tag_ids: values.tagId ? [Number(values.tagId)] : [] });
     },
     onSuccess: async () => {
-      const keys = mode === "planned" ? [queryKeys.plannedPayments, queryKeys.dashboard] : [queryKeys.transactions, queryKeys.financialAccounts, queryKeys.dashboard, ...(mode === "expense" ? [queryKeys.budgets] : [])];
-      await Promise.all(keys.map((queryKey) => client.invalidateQueries({ queryKey })));
+      await invalidateFinancialQueries(client, mode === "planned" ? mutationInvalidations.plannedPayments : mutationInvalidations.transactions);
       const label = mode === "planned" ? "Planned payment" : mode === "transfer" ? "Transfer" : mode === "income" ? "Income" : "Expense";
       setValues(initialValues());
       setError("");

@@ -69,4 +69,24 @@ describe("useAnalyticsViewState", () => {
 
     expect(window.location.hash).toBe("#/transactions");
   });
+
+  it("updates controls and URL immediately but settles only the final analytical state after 200 ms", () => {
+    vi.useFakeTimers();
+    const { result } = renderHook(() => useAnalyticsViewState("/dashboard", "expenses"));
+    const initialEffective = result.current.effectiveFilters;
+    act(() => {
+      result.current.setFilters((current) => ({ ...current, financial_account_id: 2 }));
+      result.current.setFilters((current) => ({ ...current, financial_account_id: 4 }));
+      result.current.setMetric("income");
+    });
+    expect(result.current.filters.financial_account_id).toBe(4);
+    expect(window.location.hash).toContain("account=4");
+    expect(result.current.effectiveFilters).toBe(initialEffective);
+    expect(result.current.isUpdating).toBe(true);
+    act(() => vi.advanceTimersByTime(200));
+    expect(result.current.effectiveFilters.financial_account_id).toBe(4);
+    expect(result.current.effectiveMetric).toBe("income");
+    expect(result.current.isUpdating).toBe(false);
+    vi.useRealTimers();
+  });
 });

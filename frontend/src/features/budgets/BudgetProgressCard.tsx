@@ -9,7 +9,7 @@ export function BudgetProgressList({ data, money }: { data: Awaited<ReturnType<t
 }
 
 export function BudgetProgressCard({ month, currency, locale }: { month: string; currency: string; locale: string }) {
-  const query = useQuery({ queryKey: [...queryKeys.budgets, "dashboard", month], queryFn: () => getBudgetProgress(month) });
+  const query = useQuery({ queryKey: [...queryKeys.budgets, "dashboard", month], queryFn: ({ signal }) => getBudgetProgress(month, signal) });
   const money = (minor: number) => formatMinor(minor, currency, locale);
   return <DashboardCard title="Budget progress" description={`Expense limits for ${month.slice(0, 7)}`}>{query.isPending ? <p className="py-8 text-center text-sm text-muted-foreground" role="status">Loading budget progress…</p> : query.isError ? <p className="py-8 text-center text-sm text-destructive" role="alert">Budget progress is unavailable.</p> : <BudgetProgressList data={query.data} money={money} />}</DashboardCard>;
 }

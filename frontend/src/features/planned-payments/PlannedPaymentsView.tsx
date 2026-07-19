@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createPlannedPayment, deletePlannedPayment, getPlannedPayments, markPlannedPaymentPaid, updatePlannedPayment, type PaymentDirection, type PaymentRecurrence, type PlannedPayment, type PlannedPaymentInput } from "../../api/plannedPayments";
 import { getCategories, getFinancialAccounts } from "../../api/referenceData";
 import { queryKeys } from "../../app/queryKeys";
+import { invalidateFinancialQueries, mutationInvalidations } from "../../app/invalidateQueries";
 import { localDateValue } from "../../lib/format";
 import { AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "../../components/ui/alert-dialog";
 import { Button } from "../../components/ui/button";
@@ -16,17 +17,17 @@ const fromPayment = (item: PlannedPayment): FormValues => ({ title: item.title, 
 
 export function PlannedPaymentsView({ currency, locale }: { currency: string; locale: string }) {
   const client = useQueryClient();
-  const payments = useQuery({ queryKey: queryKeys.plannedPayments, queryFn: getPlannedPayments });
-  const accounts = useQuery({ queryKey: queryKeys.financialAccounts, queryFn: getFinancialAccounts });
-  const categories = useQuery({ queryKey: queryKeys.categories, queryFn: getCategories });
+  const payments = useQuery({ queryKey: queryKeys.plannedPayments, queryFn: ({ signal }) => getPlannedPayments(signal) });
+  const accounts = useQuery({ queryKey: queryKeys.financialAccounts, queryFn: ({ signal }) => getFinancialAccounts(signal) });
+  const categories = useQuery({ queryKey: queryKeys.categories, queryFn: ({ signal }) => getCategories(signal) });
   const [editing, setEditing] = useState<PlannedPayment | "new" | null>(null);
   const [values, setValues] = useState<FormValues>(blank);
   const [confirming, setConfirming] = useState<{ action: "delete" | "paid"; item: PlannedPayment } | null>(null);
   const [error, setError] = useState("");
-  const refresh = () => Promise.all([client.invalidateQueries({ queryKey: queryKeys.plannedPayments }), client.invalidateQueries({ queryKey: queryKeys.dashboard })]);
+  const refresh = () => invalidateFinancialQueries(client, mutationInvalidations.plannedPayments);
   const save = useMutation({ mutationFn: (data: PlannedPaymentInput & { status?: "pending" | "cancelled" }) => editing === "new" ? createPlannedPayment(data) : updatePlannedPayment(editing!.id, data), onSuccess: async () => { await refresh(); setEditing(null); }, onError: (caught) => setError(caught instanceof Error ? caught.message : "The payment could not be saved.") });
   const remove = useMutation({ mutationFn: deletePlannedPayment, onSuccess: async () => { await refresh(); setConfirming(null); } });
-  const markPaid = useMutation({ mutationFn: (item: PlannedPayment) => markPlannedPaymentPaid(item.id, item.due_date), onSuccess: async (result) => { const keys = [queryKeys.plannedPayments, queryKeys.dashboard, ...(result.transaction ? [queryKeys.transactions, queryKeys.financialAccounts] : []), ...(result.transaction?.kind === "expense" ? [queryKeys.budgets] : [])]; await Promise.all(keys.map((queryKey) => client.invalidateQueries({ queryKey }))); setConfirming(null); } });
+  const markPaid = useMutation({ mutationFn: (item: PlannedPayment) => markPlannedPaymentPaid(item.id, item.due_date), onSuccess: async () => { await invalidateFinancialQueries(client, mutationInvalidations.markPaid); setConfirming(null); } });
   const money = (minor: number) => formatMinor(minor, currency, locale, 2);
   const open = (item: PlannedPayment | "new") => { setEditing(item); setValues(item === "new" ? blank() : fromPayment(item)); setError(""); };
   const update = <K extends keyof FormValues>(key: K, value: FormValues[K]) => setValues((current) => ({ ...current, [key]: value, ...(key === "direction" ? { categoryId: "" } : {}) }));

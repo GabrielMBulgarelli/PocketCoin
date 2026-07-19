@@ -4,6 +4,7 @@ import { PencilIcon, PlusIcon, WalletCardsIcon } from "lucide-react";
 
 import { getFinancialAccounts, saveAccount, type FinancialAccount } from "../../api/referenceData";
 import { queryKeys } from "../../app/queryKeys";
+import { invalidateFinancialQueries, mutationInvalidations } from "../../app/invalidateQueries";
 import { formatMinor, formatShortDate, localDateValue } from "../../lib/format";
 import { Button } from "../../components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "../../components/ui/dialog";
@@ -13,10 +14,10 @@ const today = localDateValue;
 
 export function FinancialAccountsView({ currency, locale }: { currency: string; locale: string }) {
   const client = useQueryClient();
-  const query = useQuery({ queryKey: queryKeys.financialAccounts, queryFn: getFinancialAccounts });
+  const query = useQuery({ queryKey: queryKeys.financialAccounts, queryFn: ({ signal }) => getFinancialAccounts(signal) });
   const [editing, setEditing] = useState<FinancialAccount | null | undefined>(undefined);
   const [error, setError] = useState("");
-  const mutation = useMutation({ mutationFn: ({ id, data }: { id: number | null; data: object }) => saveAccount(id, data), onSuccess: async () => { await Promise.all([client.invalidateQueries({ queryKey: queryKeys.financialAccounts }), client.invalidateQueries({ queryKey: queryKeys.transactions })]); setEditing(undefined); } });
+  const mutation = useMutation({ mutationFn: ({ id, data }: { id: number | null; data: object }) => saveAccount(id, data), onSuccess: async () => { await invalidateFinancialQueries(client, mutationInvalidations.accounts); setEditing(undefined); } });
   const open = (account: FinancialAccount | null) => { setError(""); setEditing(account); };
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault(); setError("");

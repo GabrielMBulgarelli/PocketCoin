@@ -1,4 +1,4 @@
-import { getApiErrorMessage } from "./error";
+import { apiGet, apiJson } from "./client";
 import type { Transaction } from "./transactions";
 
 export type PaymentDirection = "income" | "expense";
@@ -13,14 +13,9 @@ export type PlannedPayment = {
 export type PlannedPaymentInput = Pick<PlannedPayment, "title" | "amount_minor" | "direction" | "due_date" | "recurrence" | "is_debt_payment" | "notes" | "financial_account_id" | "category_id">;
 export type MarkPaidResult = { payment: PlannedPayment; transaction: Transaction | null };
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(path, { ...init, headers: init?.body ? { "Content-Type": "application/json" } : undefined });
-  if (!response.ok) throw new Error(await getApiErrorMessage(response));
-  return response.status === 204 ? undefined as T : response.json() as Promise<T>;
-}
-
-export const getPlannedPayments = () => request<PlannedPayment[]>("/api/planned-payments");
-export const createPlannedPayment = (data: PlannedPaymentInput) => request<PlannedPayment>("/api/planned-payments", { method: "POST", body: JSON.stringify(data) });
-export const updatePlannedPayment = (id: number, data: Partial<PlannedPaymentInput> & { status?: PaymentStatus }) => request<PlannedPayment>(`/api/planned-payments/${id}`, { method: "PATCH", body: JSON.stringify(data) });
-export const deletePlannedPayment = (id: number) => request<void>(`/api/planned-payments/${id}`, { method: "DELETE" });
-export const markPlannedPaymentPaid = (id: number, expectedDueDate: string) => request<MarkPaidResult>(`/api/planned-payments/${id}/mark-paid`, { method: "POST", body: JSON.stringify({ expected_due_date: expectedDueDate }) });
+const jsonHeaders = { "Content-Type": "application/json" };
+export const getPlannedPayments = (signal?: AbortSignal) => apiGet<PlannedPayment[]>("/api/planned-payments", { signal });
+export const createPlannedPayment = (data: PlannedPaymentInput) => apiJson<PlannedPayment>("/api/planned-payments", { method: "POST", headers: jsonHeaders, body: JSON.stringify(data) });
+export const updatePlannedPayment = (id: number, data: Partial<PlannedPaymentInput> & { status?: PaymentStatus }) => apiJson<PlannedPayment>(`/api/planned-payments/${id}`, { method: "PATCH", headers: jsonHeaders, body: JSON.stringify(data) });
+export const deletePlannedPayment = (id: number) => apiJson<void>(`/api/planned-payments/${id}`, { method: "DELETE" });
+export const markPlannedPaymentPaid = (id: number, expectedDueDate: string) => apiJson<MarkPaidResult>(`/api/planned-payments/${id}/mark-paid`, { method: "POST", headers: jsonHeaders, body: JSON.stringify({ expected_due_date: expectedDueDate }) });

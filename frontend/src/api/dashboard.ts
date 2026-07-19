@@ -1,4 +1,4 @@
-import { getApiErrorMessage } from "./error";
+import { apiGet } from "./client";
 import type { Transaction } from "./transactions";
 import type { PlannedPayment } from "./plannedPayments";
 
@@ -25,11 +25,9 @@ export type RecurringDebts = { items: RecurringDebtItem[]; monthly_total_minor: 
 export type DebtToIncome = { monthly_debt_minor: number; gross_income_minor: number; ratio_percentage: number | null };
 export type DashboardData = { summary: DashboardSummary; forecast: BalanceForecast; creditUtilization: CreditUtilization; creditAccounts: CreditAccountUtilization[]; recurringDebts: RecurringDebts; debtToIncome: DebtToIncome; cashFlow: CashFlowPoint[]; comparison: ComparisonPoint[]; categories: CategoryPoint[]; structure: CategoryPoint[]; recent: Transaction[]; upcoming: PlannedPayment[] };
 
-export async function getDashboardEndpoint<T>(path: string, filters: DashboardFilters, extra: Record<string, string> = {}): Promise<T> {
+export async function getDashboardEndpoint<T>(path: string, filters: DashboardFilters, extra: Record<string, string> = {}, signal?: AbortSignal): Promise<T> {
   const params = new URLSearchParams([...Object.entries(filters).filter(([, value]) => value !== undefined).map(([key, value]) => [key, String(value)]), ...Object.entries(extra)]);
-  const response = await fetch(`/api/dashboard/${path}?${params}`);
-  if (!response.ok) throw new Error(await getApiErrorMessage(response));
-  return response.json() as Promise<T>;
+  return apiGet<T>(`/api/dashboard/${path}?${params}`, { signal });
 }
 
 export async function getDashboard(filters: DashboardFilters): Promise<DashboardData> {

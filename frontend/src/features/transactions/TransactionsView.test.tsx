@@ -47,6 +47,6 @@ describe("TransactionsView filters and formatting", () => {
       tag_id: "3",
       limit: 25,
       offset: 0,
-    })));
+    }), expect.any(AbortSignal)));
   });
 });

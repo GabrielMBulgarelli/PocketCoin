@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { commitImport, getImportHistory, type ImportMapping, uploadImport, validateImport } from "../../api/imports";
 import { getCategories, getFinancialAccounts } from "../../api/referenceData";
 import { queryKeys } from "../../app/queryKeys";
+import { invalidateFinancialQueries, mutationInvalidations } from "../../app/invalidateQueries";
 import { Button } from "../../components/ui/button";
 import { AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "../../components/ui/alert-dialog";
 import { formatMinor } from "../../lib/format";
@@ -14,9 +15,9 @@ const emptyMapping: ImportMapping = { date_column: "", description_column: "", a
 
 export function ImportView({ currency, locale }: { currency: string; locale: string }) {
   const client = useQueryClient();
-  const accounts = useQuery({ queryKey: queryKeys.financialAccounts, queryFn: getFinancialAccounts });
-  const categories = useQuery({ queryKey: queryKeys.categories, queryFn: getCategories });
-  const history = useQuery({ queryKey: queryKeys.imports, queryFn: getImportHistory });
+  const accounts = useQuery({ queryKey: queryKeys.financialAccounts, queryFn: ({ signal }) => getFinancialAccounts(signal) });
+  const categories = useQuery({ queryKey: queryKeys.categories, queryFn: ({ signal }) => getCategories(signal) });
+  const history = useQuery({ queryKey: queryKeys.imports, queryFn: ({ signal }) => getImportHistory(signal) });
   const [preview, setPreview] = useState<Awaited<ReturnType<typeof uploadImport>> | null>(null);
   const [mapping, setMapping] = useState<ImportMapping>(emptyMapping);
   const [validation, setValidation] = useState<Awaited<ReturnType<typeof validateImport>> | null>(null);
@@ -34,7 +35,7 @@ export function ImportView({ currency, locale }: { currency: string; locale: str
   const validate = useMutation({ mutationFn: () => validateImport(preview!.preview_id, mapping), onSuccess: (data) => { setValidation(data); setSelected(new Set(data.rows.filter((row) => row.eligible).map((row) => row.row_number))); setPage(0); } });
   const commit = useMutation({ mutationFn: () => commitImport(preview!.preview_id, mapping, [...selected]), onSuccess: async (data) => {
     setResult(data); setConfirming(false);
-    await Promise.all([queryKeys.imports, queryKeys.transactions, queryKeys.financialAccounts, queryKeys.budgets, queryKeys.dashboard, queryKeys.reports].map((queryKey) => client.invalidateQueries({ queryKey })));
+    await invalidateFinancialQueries(client, mutationInvalidations.imports);
   } });
 
   const visibleRows = validation?.rows.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE) ?? [];

@@ -31,7 +31,7 @@ function DataSafetyCard({ locale }: { locale: string }) {
   const [selected, setSelected] = useState<Backup | null>(null);
   const [confirmation, setConfirmation] = useState("");
   const [restoreError, setRestoreError] = useState("");
-  const backups = useQuery({ queryKey: queryKeys.backups, queryFn: listBackups });
+  const backups = useQuery({ queryKey: queryKeys.backups, queryFn: ({ signal }) => listBackups(signal) });
   const createMutation = useMutation({
     mutationFn: createBackup,
     onSuccess: () => void client.invalidateQueries({ queryKey: queryKeys.backups }),

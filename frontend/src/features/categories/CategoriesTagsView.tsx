@@ -4,6 +4,7 @@ import { PencilIcon, PlusIcon } from "lucide-react";
 
 import { getCategories, getTags, saveCategory, saveTag, type Category, type Tag } from "../../api/referenceData";
 import { queryKeys } from "../../app/queryKeys";
+import { invalidateFinancialQueries, mutationInvalidations } from "../../app/invalidateQueries";
 import { Button } from "../../components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "../../components/ui/dialog";
 
@@ -12,11 +13,11 @@ type Editor = { type: "category"; item: Category | null } | { type: "tag"; item:
 
 export function CategoriesTagsView() {
   const client = useQueryClient();
-  const categories = useQuery({ queryKey: queryKeys.categories, queryFn: getCategories });
-  const tags = useQuery({ queryKey: queryKeys.tags, queryFn: getTags });
+  const categories = useQuery({ queryKey: queryKeys.categories, queryFn: ({ signal }) => getCategories(signal) });
+  const tags = useQuery({ queryKey: queryKeys.tags, queryFn: ({ signal }) => getTags(signal) });
   const [editor, setEditor] = useState<Editor | null>(null);
   const [error, setError] = useState("");
-  const mutation = useMutation({ mutationFn: ({ type, id, data }: { type: "category" | "tag"; id: number | null; data: object }) => type === "category" ? saveCategory(id, data) : saveTag(id, data), onSuccess: async (_, variables) => { await Promise.all([client.invalidateQueries({ queryKey: variables.type === "category" ? queryKeys.categories : queryKeys.tags }), client.invalidateQueries({ queryKey: queryKeys.transactions })]); setEditor(null); } });
+  const mutation = useMutation({ mutationFn: ({ type, id, data }: { type: "category" | "tag"; id: number | null; data: object }) => type === "category" ? saveCategory(id, data) : saveTag(id, data), onSuccess: async (_, variables) => { await invalidateFinancialQueries(client, mutationInvalidations[variables.type === "category" ? "categories" : "tags"]); setEditor(null); } });
   const open = (value: Editor) => { setError(""); setEditor(value); };
   const submit = (event: FormEvent<HTMLFormElement>) => { event.preventDefault(); if (!editor) return; setError(""); const data = new FormData(event.currentTarget); const name = String(data.get("name") ?? "").trim(); if (!name) return setError("Name is required."); mutation.mutate({ type: editor.type, id: editor.item?.id ?? null, data: { name, ...(editor.type === "category" && !editor.item ? { direction: data.get("direction") } : {}), ...(editor.item ? { is_active: data.get("is_active") === "on" } : {}) } }, { onError: (value) => setError(value instanceof Error ? value.message : "The change could not be saved.") }); };
   if (categories.isPending || tags.isPending) return <State text="Loading categories and tags…" />;

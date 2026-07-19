@@ -1,4 +1,5 @@
 export const queryKeys = {
+  health: ["health"] as const,
   settings: ["settings"] as const,
   financialAccounts: ["financial-accounts"] as const,
   categories: ["categories"] as const,

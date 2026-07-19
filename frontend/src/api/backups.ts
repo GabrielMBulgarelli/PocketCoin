@@ -1,4 +1,4 @@
-import { getApiErrorMessage } from "./error";
+import { apiGet, apiJson } from "./client";
 
 export type Backup = {
   id: string;
@@ -12,22 +12,16 @@ export type RestoreResult = {
   pre_restore_backup: Backup;
 };
 
-async function backupRequest<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(path, init);
-  if (!response.ok) throw new Error(await getApiErrorMessage(response));
-  return response.json() as Promise<T>;
-}
-
-export function listBackups(): Promise<Backup[]> {
-  return backupRequest<Backup[]>("/api/backups");
+export function listBackups(signal?: AbortSignal): Promise<Backup[]> {
+  return apiGet<Backup[]>("/api/backups", { signal });
 }
 
 export function createBackup(): Promise<Backup> {
-  return backupRequest<Backup>("/api/backups", { method: "POST" });
+  return apiJson<Backup>("/api/backups", { method: "POST" });
 }
 
 export function restoreBackup(id: string, confirmation: string): Promise<RestoreResult> {
-  return backupRequest<RestoreResult>(`/api/backups/${encodeURIComponent(id)}/restore`, {
+  return apiJson<RestoreResult>(`/api/backups/${encodeURIComponent(id)}/restore`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ confirmation }),

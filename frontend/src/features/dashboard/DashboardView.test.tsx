@@ -61,7 +61,7 @@ describe("DashboardView date-dependent queries", () => {
 
     fireEvent.change(screen.getByLabelText("To"), { target: { value: "2026-12-15" } });
 
-    await waitFor(() => expect(getBudgetProgress).toHaveBeenCalledWith("2026-12-01"));
+    await waitFor(() => expect(getBudgetProgress).toHaveBeenCalledWith("2026-12-01", expect.any(AbortSignal)));
   });
 
   it("shows an invalid range and pauses financial queries", async () => {
@@ -100,11 +100,13 @@ describe("DashboardView date-dependent queries", () => {
       "cash-flow-table",
       expect.any(Object),
       {},
+      expect.any(AbortSignal),
     );
     expect(getDashboardEndpoint).not.toHaveBeenCalledWith(
       "cash-flow",
       expect.any(Object),
       expect.anything(),
+      expect.any(AbortSignal),
     );
   });
 
@@ -116,6 +118,7 @@ describe("DashboardView date-dependent queries", () => {
       "period-comparison",
       expect.any(Object),
       { metric: "expenses" },
+      expect.any(AbortSignal),
     ));
   });
 
@@ -129,6 +132,7 @@ describe("DashboardView date-dependent queries", () => {
       "period-comparison",
       expect.any(Object),
       { metric: "income" },
+      expect.any(AbortSignal),
     ));
   });
 

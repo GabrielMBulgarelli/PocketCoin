@@ -116,8 +116,8 @@ describe("ReportsView", () => {
 
     expect(await screen.findByText("Cash-flow statistics")).toBeInTheDocument();
     expect(screen.getAllByRole("region", { name: "Cash flow" })).toHaveLength(2);
-    expect(getDashboardEndpoint).toHaveBeenCalledWith("cash-flow", expect.any(Object), {});
-    expect(getDashboardEndpoint).toHaveBeenCalledWith("cash-flow-table", expect.any(Object), {});
+    expect(getDashboardEndpoint).toHaveBeenCalledWith("cash-flow", expect.any(Object), {}, expect.any(AbortSignal));
+    expect(getDashboardEndpoint).toHaveBeenCalledWith("cash-flow-table", expect.any(Object), {}, expect.any(AbortSignal));
   });
 
   it("defaults period comparison to cash flow", async () => {
@@ -128,6 +128,7 @@ describe("ReportsView", () => {
       "period-comparison",
       expect.any(Object),
       { metric: "cash_flow" },
+      expect.any(AbortSignal),
     ));
   });
 
@@ -141,6 +142,7 @@ describe("ReportsView", () => {
       "period-comparison",
       expect.any(Object),
       { metric: "expenses" },
+      expect.any(AbortSignal),
     ));
   });
 

@@ -1,4 +1,4 @@
-import { getApiErrorMessage } from "./error";
+import { apiGet, apiJson } from "./client";
 
 export type ImportMapping = {
   date_column: string;
@@ -22,13 +22,7 @@ export type ImportValidation = { preview_id: string; total_rows: number; valid_c
 export type ImportSummary = { preview_id: string; status: string; imported_count: number; skipped_count: number; failed_count: number };
 export type ImportHistory = { id: string; filename: string; status: "pending" | "committed" | "expired"; imported_count: number; skipped_count: number; failed_count: number; created_at: string; completed_at: string | null };
 
-async function json<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(path, init);
-  if (!response.ok) throw new Error(await getApiErrorMessage(response));
-  return response.json() as Promise<T>;
-}
-
-export const uploadImport = (file: File) => json<ImportPreview>(`/api/imports/preview?filename=${encodeURIComponent(file.name)}`, { method: "POST", headers: { "content-type": "text/csv" }, body: file });
-export const validateImport = (id: string, mapping: ImportMapping) => json<ImportValidation>(`/api/imports/${id}/validate`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(mapping) });
-export const commitImport = (id: string, mapping: ImportMapping, selected: number[]) => json<ImportSummary>(`/api/imports/${id}/commit`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...mapping, selected_row_numbers: selected }) });
-export const getImportHistory = () => json<ImportHistory[]>("/api/imports");
+export const uploadImport = (file: File) => apiJson<ImportPreview>(`/api/imports/preview?filename=${encodeURIComponent(file.name)}`, { method: "POST", headers: { "content-type": "text/csv" }, body: file });
+export const validateImport = (id: string, mapping: ImportMapping) => apiJson<ImportValidation>(`/api/imports/${id}/validate`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(mapping) });
+export const commitImport = (id: string, mapping: ImportMapping, selected: number[]) => apiJson<ImportSummary>(`/api/imports/${id}/commit`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...mapping, selected_row_numbers: selected }) });
+export const getImportHistory = (signal?: AbortSignal) => apiGet<ImportHistory[]>("/api/imports", { signal });

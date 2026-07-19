@@ -1,10 +1,11 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { App } from "./App";
 
 afterEach(() => {
+  vi.useRealTimers();
   window.history.replaceState(null, "", "#/dashboard");
   vi.unstubAllGlobals();
 });
@@ -121,6 +122,31 @@ describe("App", () => {
     );
 
     expect(await screen.findByText("Local API is available")).toBeInTheDocument();
+  });
+
+  it("announces an outage and recovers after health returns", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    window.history.replaceState(null, "", "#/categories");
+    let healthy = false;
+    vi.stubGlobal("fetch", vi.fn().mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (healthy) {
+        const payload = url.endsWith("/api/health")
+          ? { status: "ok" }
+          : url.endsWith("/api/settings")
+            ? { base_currency: "USD", locale: "en-US", first_day_of_week: "monday", theme: "system" }
+            : [];
+        return Promise.resolve({ ok: true, status: 200, json: async () => payload });
+      }
+      return Promise.reject(new TypeError("Failed to fetch"));
+    }));
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(<QueryClientProvider client={queryClient}><App /></QueryClientProvider>);
+    expect(await screen.findByRole("alert")).toHaveTextContent("Local API is unavailable. PocketCoin will retry automatically.");
+    healthy = true;
+    await act(async () => vi.advanceTimersByTimeAsync(5_000));
+    expect(await screen.findByText("Local API is available")).toBeInTheDocument();
+    expect(screen.queryByText("Failed to fetch")).not.toBeInTheDocument();
   });
 
   it("traps navigation focus, marks the active route, and restores focus on Escape", async () => {
