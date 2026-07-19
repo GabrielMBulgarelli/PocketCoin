@@ -13,5 +13,6 @@ export const routes = [
 export type RoutePath = (typeof routes)[number][0];
 
 export function routeFor(path: string): RoutePath {
-  return routes.some(([route]) => route === path) ? (path as RoutePath) : "/dashboard";
+  const routePath = path.split("?", 1)[0];
+  return routes.some(([route]) => route === routePath) ? (routePath as RoutePath) : "/dashboard";
 }

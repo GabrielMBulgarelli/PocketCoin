@@ -36,4 +36,9 @@ database_maintenance_lock = Lock()
 
 def get_session() -> Generator[Session]:
     with database_maintenance_lock, SessionLocal() as session:
-        yield session
+        try:
+            yield session
+            session.commit()
+        except Exception:
+            session.rollback()
+            raise

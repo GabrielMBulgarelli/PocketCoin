@@ -1,11 +1,10 @@
-import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { getDashboardEndpoint, type BalanceForecast, type CashFlowTable, type CategoryPoint, type ComparisonMetric, type ComparisonPoint, type CreditAccountUtilization, type CreditUtilization, type DashboardFilters, type DashboardSummary, type DebtToIncome, type RecurringDebts } from "../../api/dashboard";
+import { getDashboardEndpoint, type BalanceForecast, type CashFlowTable, type CategoryPoint, type ComparisonPoint, type CreditAccountUtilization, type CreditUtilization, type DashboardFilters, type DashboardSummary, type DebtToIncome, type RecurringDebts } from "../../api/dashboard";
 import type { PlannedPayment } from "../../api/plannedPayments";
 import { getCategories, getFinancialAccounts, getTags } from "../../api/referenceData";
 import type { Transaction } from "../../api/transactions";
 import { queryKeys } from "../../app/queryKeys";
-import { formatMinor, formatShortDate, localDateValue, monthStartValue } from "../../lib/format";
+import { formatMinor, formatShortDate, monthStartValue } from "../../lib/format";
 import { BudgetProgressCard } from "../budgets/BudgetProgressCard";
 import { BalanceForecastCard } from "./BalanceForecastCard";
 import { CategorySpendingCard, DashboardFiltersControl, ExpenseStructureCard, PeriodComparisonCard } from "./DashboardCards";
@@ -14,6 +13,7 @@ import { CreditDebtSection } from "./CreditDebtSection";
 import { DashboardCard } from "./DashboardCard";
 import { PeriodLabel } from "./DashboardIndicators";
 import { MetricSelector } from "./MetricSelector";
+import { useAnalyticsViewState } from "./useAnalyticsViewState";
 
 function useDashboardSection<T>(path: string, filters: DashboardFilters, enabled: boolean, extra: Record<string, string> = {}) {
   return useQuery({ queryKey: [...queryKeys.dashboard, path, filters, extra], queryFn: () => getDashboardEndpoint<T>(path, filters, extra), enabled });
@@ -26,12 +26,14 @@ function SectionState({ title, period, query }: { title: string; period: string;
 }
 
 export function DashboardView({ currency, locale }: { currency: string; locale: string }) {
-  const [filters, setFilters] = useState<DashboardFilters>({ start_date: monthStartValue(localDateValue()), end_date: localDateValue() });
-  const [metric, setMetric] = useState<ComparisonMetric>("expenses");
+  const { filters, metric, setFilters, setMetric, reset } = useAnalyticsViewState("/dashboard", "expenses");
   const validRange = Boolean(filters.start_date && filters.end_date && filters.start_date <= filters.end_date);
   const accounts = useQuery({ queryKey: queryKeys.financialAccounts, queryFn: getFinancialAccounts });
   const categories = useQuery({ queryKey: queryKeys.categories, queryFn: getCategories });
   const tags = useQuery({ queryKey: queryKeys.tags, queryFn: getTags });
+  const accountCatalog = { data: accounts.data, isPending: accounts.isPending, isError: accounts.isError, retry: () => void accounts.refetch() };
+  const categoryCatalog = { data: categories.data, isPending: categories.isPending, isError: categories.isError, retry: () => void categories.refetch() };
+  const tagCatalog = { data: tags.data, isPending: tags.isPending, isError: tags.isError, retry: () => void tags.refetch() };
   const summary = useDashboardSection<DashboardSummary>("summary", filters, validRange);
   const forecast = useDashboardSection<BalanceForecast>("balance-forecast", filters, validRange);
   const cashTable = useDashboardSection<CashFlowTable>("cash-flow-table", filters, validRange);
@@ -49,9 +51,9 @@ export function DashboardView({ currency, locale }: { currency: string; locale: 
   const period = validRange ? `${shortDate(filters.start_date)} – ${shortDate(filters.end_date)}` : "Adjust the date filters";
   const debtErrors = [credit, creditAccounts, recurringDebts, debtToIncome].filter((item) => item.isError).map((item) => item.error?.message ?? "A debt metric could not be loaded.");
 
-  if (!validRange) return <div className="space-y-5"><DashboardFiltersControl filters={filters} onChange={setFilters} accounts={accounts.data} categories={categories.data} tags={tags.data} /><DashboardCard title="Invalid date range" description={period}><p className="py-8 text-sm text-destructive" role="alert">The start date must be on or before the end date. Adjust either date to continue.</p></DashboardCard></div>;
+  if (!validRange) return <div className="min-w-0 space-y-5"><DashboardFiltersControl filters={filters} onChange={setFilters} accounts={accountCatalog} categories={categoryCatalog} tags={tagCatalog} onReset={reset} /><DashboardCard title="Invalid date range" description={period}><p className="py-8 text-sm text-destructive" role="alert">The start date must be on or before the end date. Adjust either date to continue.</p></DashboardCard></div>;
 
-  return <div className="space-y-5"><DashboardFiltersControl filters={filters} onChange={setFilters} accounts={accounts.data} categories={categories.data} tags={tags.data} />
+  return <div className="min-w-0 space-y-5"><DashboardFiltersControl filters={filters} onChange={setFilters} accounts={accountCatalog} categories={categoryCatalog} tags={tagCatalog} onReset={reset} />
     {summary.isPending || summary.isError ? <SectionState title="Summary" period={period} query={summary} /> : <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">{[["Balance", summary.data.balance_minor], ["Income", summary.data.income_minor], ["Expenses", summary.data.expense_minor], ["Net", summary.data.net_minor]].map(([label, value]) => <DashboardCard key={String(label)} title={String(label)} period={label === "Balance" ? <PeriodLabel kind="as-of" date={filters.end_date} locale={locale} /> : <PeriodLabel kind="range" startDate={filters.start_date} endDate={filters.end_date} locale={locale} />} contentClassName="mt-3"><p className="text-2xl font-semibold tabular-nums">{money(Number(value))}</p>{label === "Net" && <p className="mt-2 text-xs text-muted-foreground">Savings rate {summary.data.savings_rate === null ? "—" : `${summary.data.savings_rate}%`}</p>}</DashboardCard>)}</div>}
     <div className="grid gap-5 xl:grid-cols-2">
       {forecast.isPending || forecast.isError ? <SectionState title="Balance forecast" period={period} query={forecast} /> : <BalanceForecastCard forecast={forecast.data} formatMinor={money} shortDate={shortDate} />}

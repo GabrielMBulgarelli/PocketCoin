@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { App } from "./App";
 
 afterEach(() => {
+  window.history.replaceState(null, "", "#/dashboard");
   vi.unstubAllGlobals();
 });
 
@@ -98,6 +99,16 @@ function stubApi() {
 }
 
 describe("App", () => {
+  it("resolves a view when its hash includes analytical parameters", async () => {
+    window.history.replaceState(null, "", "#/reports?from=2026-07-01&to=2026-07-19&metric=income");
+    stubApi();
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+
+    render(<QueryClientProvider client={queryClient}><App /></QueryClientProvider>);
+
+    expect(await screen.findByRole("heading", { name: "Reports" })).toBeInTheDocument();
+  });
+
   it("displays the successful local API health status", async () => {
     stubApi();
 

@@ -1,11 +1,11 @@
-import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { getCategories, getFinancialAccounts, getTags } from "../../api/referenceData";
-import { getDashboardEndpoint, type CashFlowPoint, type CashFlowTable, type CategoryPoint, type ComparisonMetric, type ComparisonPoint, type CreditAccountUtilization, type CreditUtilization, type DashboardFilters, type DebtToIncome, type RecurringDebts } from "../../api/dashboard";
+import { getDashboardEndpoint, type CashFlowPoint, type CashFlowTable, type CategoryPoint, type ComparisonPoint, type CreditAccountUtilization, type CreditUtilization, type DashboardFilters, type DebtToIncome, type RecurringDebts } from "../../api/dashboard";
 import type { BudgetProgress } from "../../api/budgets";
 import { exportTransactions } from "../../api/transactions";
 import { queryKeys } from "../../app/queryKeys";
-import { formatMinor, formatShortDate, localDateValue, monthStartValue } from "../../lib/format";
+import { formatMinor, formatShortDate } from "../../lib/format";
+import { useCsvExport } from "../../lib/useCsvExport";
 import { BudgetProgressList } from "../budgets/BudgetProgressCard";
 import { CashFlowCard, CategorySpendingCard, DashboardFiltersControl, ExpenseStructureCard, PeriodComparisonCard } from "../dashboard/DashboardCards";
 import { CashFlowSummaryCard } from "../dashboard/CashFlowSummaryCard";
@@ -13,6 +13,7 @@ import { CreditDebtSection } from "../dashboard/CreditDebtSection";
 import { DashboardCard } from "../dashboard/DashboardCard";
 import { PeriodLabel } from "../dashboard/DashboardIndicators";
 import { MetricSelector } from "../dashboard/MetricSelector";
+import { useAnalyticsViewState } from "../dashboard/useAnalyticsViewState";
 
 function useReportSection<T>(path: string, filters: DashboardFilters, enabled: boolean, extra: Record<string, string> = {}) {
   return useQuery({ queryKey: [...queryKeys.reports, path, filters, extra], queryFn: () => getDashboardEndpoint<T>(path, filters, extra), enabled });
@@ -25,11 +26,11 @@ function SectionState({ title, period, query }: { title: string; period: string;
 }
 
 export function ReportsView({ currency, locale }: { currency: string; locale: string }) {
-  const [filters, setFilters] = useState<DashboardFilters>({ start_date: monthStartValue(localDateValue()), end_date: localDateValue() });
+  const { filters, metric, setFilters, setMetric, reset } = useAnalyticsViewState("/reports", "cash_flow");
   const validRange = Boolean(filters.start_date && filters.end_date && filters.start_date <= filters.end_date);
-  const [metric, setMetric] = useState<ComparisonMetric>("cash_flow");
-  const [exportError, setExportError] = useState("");
+  const csvExport = useCsvExport();
   const accounts = useQuery({ queryKey: queryKeys.financialAccounts, queryFn: getFinancialAccounts }); const categories = useQuery({ queryKey: queryKeys.categories, queryFn: getCategories }); const tags = useQuery({ queryKey: queryKeys.tags, queryFn: getTags });
+  const accountCatalog = { data: accounts.data, isPending: accounts.isPending, isError: accounts.isError, retry: () => void accounts.refetch() }; const categoryCatalog = { data: categories.data, isPending: categories.isPending, isError: categories.isError, retry: () => void categories.refetch() }; const tagCatalog = { data: tags.data, isPending: tags.isPending, isError: tags.isError, retry: () => void tags.refetch() };
   const cashFlow = useReportSection<CashFlowPoint[]>("cash-flow", filters, validRange);
   const cashTable = useReportSection<CashFlowTable>("cash-flow-table", filters, validRange);
   const comparison = useReportSection<ComparisonPoint[]>("period-comparison", filters, validRange, { metric });
@@ -42,8 +43,8 @@ export function ReportsView({ currency, locale }: { currency: string; locale: st
   const debtToIncome = useReportSection<DebtToIncome>("debt-to-income", filters, validRange);
   const money = (value: number) => formatMinor(value, currency, locale); const shortDate = (value: string) => formatShortDate(value, locale); const period = validRange ? `${shortDate(filters.start_date)} – ${shortDate(filters.end_date)}` : "Adjust the date filters";
   const debtErrors = [credit, creditAccounts, recurringDebts, debtToIncome].filter((item) => item.isError).map((item) => item.error?.message ?? "A debt metric could not be loaded.");
-  return <div className="space-y-5"><DashboardFiltersControl label="Report filters" filters={filters} onChange={setFilters} accounts={accounts.data} categories={categories.data} tags={tags.data} />
-    <div className="flex justify-end"><button className="h-10 touch-manipulation rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50" type="button" disabled={!validRange} onClick={() => { setExportError(""); void exportTransactions(filters).catch((error: Error) => setExportError(error.message)); }}>Export filtered CSV</button></div>{exportError && <p role="alert" className="text-sm text-destructive">{exportError}</p>}
+  return <div className="min-w-0 space-y-5"><DashboardFiltersControl label="Report filters" filters={filters} onChange={setFilters} accounts={accountCatalog} categories={categoryCatalog} tags={tagCatalog} onReset={reset} />
+    <div className="flex justify-end"><button className="min-h-11 touch-manipulation rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50" type="button" disabled={!validRange || csvExport.status === "exporting"} onClick={() => void csvExport.start(() => exportTransactions(filters))}>{csvExport.status === "exporting" ? "Exporting…" : "Export filtered CSV"}</button></div>{csvExport.message && <p role={csvExport.status === "error" ? "alert" : "status"} aria-live="polite" className={csvExport.status === "error" ? "text-sm text-destructive" : "text-sm text-muted-foreground"}>{csvExport.message}</p>}
     {!validRange ? <DashboardCard title="Invalid date range" description={period}><p className="py-8 text-sm text-destructive" role="alert">The start date must be on or before the end date. Adjust either date to continue.</p></DashboardCard> : <>
       {cashTable.isPending || cashTable.isError ? <SectionState title="Cash-flow statistics" period={period} query={cashTable} /> : <>
         <CashFlowSummaryCard data={cashTable.data} period={<PeriodLabel kind="range" startDate={filters.start_date} endDate={filters.end_date} locale={locale} />} formatMinor={money} />

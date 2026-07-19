@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { getDashboardEndpoint } from "../../api/dashboard";
 import { getBudgetProgress } from "../../api/budgets";
+import { getCategories, getFinancialAccounts, getTags } from "../../api/referenceData";
 import { DashboardView } from "./DashboardView";
 
 vi.mock("../../api/referenceData", () => ({
@@ -45,8 +46,12 @@ function renderDashboard() {
 
 describe("DashboardView date-dependent queries", () => {
   beforeEach(() => {
+    window.history.replaceState(null, "", "#/dashboard");
     vi.mocked(getDashboardEndpoint).mockImplementation(async (path) => endpointData[path]);
     vi.mocked(getBudgetProgress).mockResolvedValue([]);
+    vi.mocked(getFinancialAccounts).mockResolvedValue([]);
+    vi.mocked(getCategories).mockResolvedValue([]);
+    vi.mocked(getTags).mockResolvedValue([]);
   });
   afterEach(() => vi.clearAllMocks());
 
@@ -125,5 +130,25 @@ describe("DashboardView date-dependent queries", () => {
       expect.any(Object),
       { metric: "income" },
     ));
+  });
+
+  it("isolates a failed reference catalog and retries only failed catalogs", async () => {
+    vi.mocked(getFinancialAccounts)
+      .mockRejectedValueOnce(new Error("accounts failed"))
+      .mockResolvedValue([{ id: 3, name: "Checking", kind: "checking", opening_balance_minor: 0, opening_balance_date: "2026-01-01", credit_limit_minor: null, is_active: true }]);
+
+    renderDashboard();
+
+    expect(await screen.findByRole("alert", { name: "Filter data unavailable" })).toHaveTextContent("accounts");
+    expect(screen.getByLabelText("Account")).toBeDisabled();
+    expect(screen.getByLabelText("Category")).toBeEnabled();
+    expect(screen.getByText("Balance")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Retry filter data" }));
+
+    await waitFor(() => expect(screen.getByLabelText("Account")).toBeEnabled());
+    expect(getFinancialAccounts).toHaveBeenCalledTimes(2);
+    expect(getCategories).toHaveBeenCalledTimes(1);
+    expect(getTags).toHaveBeenCalledTimes(1);
   });
 });

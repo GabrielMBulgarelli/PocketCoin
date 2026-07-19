@@ -3,6 +3,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ReportsView } from "./ReportsView";
+import { exportTransactions } from "../../api/transactions";
 
 const getDashboardEndpoint = vi.fn();
 
@@ -15,6 +16,8 @@ vi.mock("../../api/referenceData", () => ({
   getCategories: vi.fn().mockResolvedValue([]),
   getTags: vi.fn().mockResolvedValue([]),
 }));
+
+vi.mock("../../api/transactions", () => ({ exportTransactions: vi.fn() }));
 
 function renderReports() {
   const queryClient = new QueryClient({
@@ -30,6 +33,8 @@ function renderReports() {
 
 describe("ReportsView", () => {
   beforeEach(() => {
+    window.history.replaceState(null, "", "#/reports");
+    vi.mocked(exportTransactions).mockResolvedValue();
     getDashboardEndpoint.mockImplementation((path: string) => {
       if (path === "cash-flow-table") {
         return Promise.resolve({
@@ -68,6 +73,7 @@ describe("ReportsView", () => {
 
   afterEach(() => {
     getDashboardEndpoint.mockReset();
+    vi.mocked(exportTransactions).mockReset();
   });
 
   it("keeps healthy report sections visible when one endpoint fails", async () => {
@@ -142,5 +148,23 @@ describe("ReportsView", () => {
     renderReports();
 
     expect(screen.getByRole("button", { name: "Export filtered CSV" })).toBeEnabled();
+  });
+
+  it("blocks duplicate exports and announces success", async () => {
+    let resolveExport!: () => void;
+    vi.mocked(exportTransactions).mockImplementation(() => new Promise<void>((resolve) => { resolveExport = resolve; }));
+    renderReports();
+    const button = screen.getByRole("button", { name: "Export filtered CSV" });
+
+    fireEvent.click(button);
+    fireEvent.click(button);
+
+    expect(button).toBeDisabled();
+    expect(button).toHaveTextContent("Exporting…");
+    expect(exportTransactions).toHaveBeenCalledTimes(1);
+
+    resolveExport();
+    expect(await screen.findByText("CSV exported successfully.")).toBeInTheDocument();
+    expect(button).toBeEnabled();
   });
 });
