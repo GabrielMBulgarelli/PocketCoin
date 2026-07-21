@@ -38,6 +38,7 @@ from app.schemas import (
     PlannedPaymentMarkPaidRead,
     PlannedPaymentRead,
     PlannedPaymentUpdate,
+    RecurrenceMaterializeRead,
     RecurringDebtsRead,
     RestoreBackupRead,
     RestoreBackupRequest,
@@ -48,6 +49,7 @@ from app.schemas import (
     TagUpdate,
     TransactionCreate,
     TransactionRead,
+    TransactionTimelineRead,
     TransactionUpdate,
     TransferCreate,
 )
@@ -83,12 +85,20 @@ from app.services.imports import (
 )
 from app.services.planned_payments import (
     PlannedPaymentInput,
+    RecurringTransactionInput,
+    cancel_recurrence,
     create_planned_payment,
+    create_recurring_transaction,
     delete_planned_payment,
+    delete_recurring_transaction,
     list_planned_payments,
+    list_transaction_timeline,
     list_upcoming_payments,
     mark_planned_payment_paid,
-    update_planned_payment,
+    materialize_due_recurrences,
+    skip_recurrence_occurrence,
+    update_recurring_transaction,
+    update_scheduled_recurrence,
 )
 from app.services.reference_data import (
     AccountInput,
@@ -109,12 +119,10 @@ from app.services.transactions import (
     TransferInput,
     create_transaction,
     create_transfer,
-    delete_transaction,
     delete_transfer,
     export_transactions_csv,
     get_transaction,
     list_transactions,
-    update_transaction,
     update_transfer,
 )
 
@@ -191,9 +199,14 @@ def post_planned_payment(
 
 @router.patch("/planned-payments/{payment_id}", response_model=PlannedPaymentRead)
 def patch_planned_payment(
-    payment_id: int, payload: PlannedPaymentUpdate, session: SessionDependency
+    payment_id: int,
+    payload: PlannedPaymentUpdate,
+    session: SessionDependency,
+    scope: str = "this_and_future",
 ) -> PlannedPaymentRead:
-    return update_planned_payment(session, payment_id, **payload.model_dump(exclude_unset=True))
+    return update_scheduled_recurrence(
+        session, payment_id, scope, **payload.model_dump(exclude_unset=True)
+    )
 
 
 @router.delete("/planned-payments/{payment_id}", status_code=204)
@@ -219,9 +232,11 @@ def get_upcoming_payments(
     financial_account_id: int | None = None,
     category_id: int | None = None,
     tag_id: int | None = None,
+    without_account: bool = False,
 ) -> list[PlannedPaymentRead]:
-    del tag_id
-    return list_upcoming_payments(session, start_date, end_date, financial_account_id, category_id)
+    return list_upcoming_payments(
+        session, start_date, end_date, financial_account_id, category_id, tag_id, without_account
+    )
 
 
 @router.get("/budgets", response_model=list[BudgetRead])
@@ -251,8 +266,11 @@ def get_budget_progress(
     financial_account_id: int | None = None,
     category_id: int | None = None,
     tag_id: int | None = None,
+    without_account: bool = False,
 ) -> list[BudgetProgressRead]:
-    return list_budget_progress(session, end_date, financial_account_id, category_id, tag_id)
+    return list_budget_progress(
+        session, end_date, financial_account_id, category_id, tag_id, without_account
+    )
 
 
 @router.get("/settings", response_model=SettingsRead)
@@ -314,9 +332,10 @@ def get_dashboard_summary(
     financial_account_id: int | None = None,
     category_id: int | None = None,
     tag_id: int | None = None,
+    without_account: bool = False,
 ) -> DashboardSummaryRead:
     return dashboard_summary(
-        session, start_date, end_date, financial_account_id, category_id, tag_id
+        session, start_date, end_date, financial_account_id, category_id, tag_id, without_account
     )
 
 
@@ -328,10 +347,11 @@ def get_balance_forecast(
     financial_account_id: int | None = None,
     category_id: int | None = None,
     tag_id: int | None = None,
+    without_account: bool = False,
 ) -> BalanceForecastRead:
     del start_date
     return balance_forecast(
-        session, end_date, financial_account_id, category_id, tag_id
+        session, end_date, financial_account_id, category_id, tag_id, without_account
     )
 
 
@@ -343,9 +363,10 @@ def get_credit_utilization(
     financial_account_id: int | None = None,
     category_id: int | None = None,
     tag_id: int | None = None,
+    without_account: bool = False,
 ) -> CreditUtilizationRead:
     del start_date, category_id, tag_id
-    return credit_utilization(session, end_date, financial_account_id)
+    return credit_utilization(session, end_date, financial_account_id, without_account)
 
 
 @router.get(
@@ -359,10 +380,11 @@ def get_credit_account_utilization(
     financial_account_id: int | None = None,
     category_id: int | None = None,
     tag_id: int | None = None,
+    without_account: bool = False,
 ) -> list[CreditAccountUtilizationRead]:
     del category_id, tag_id
     return credit_account_utilization(
-        session, start_date, end_date, financial_account_id
+        session, start_date, end_date, financial_account_id, without_account
     )
 
 
@@ -374,9 +396,10 @@ def get_recurring_debts(
     financial_account_id: int | None = None,
     category_id: int | None = None,
     tag_id: int | None = None,
+    without_account: bool = False,
 ) -> RecurringDebtsRead:
     del start_date, end_date, tag_id
-    return recurring_debts(session, financial_account_id, category_id)
+    return recurring_debts(session, financial_account_id, category_id, without_account)
 
 
 @router.get("/dashboard/debt-to-income", response_model=DebtToIncomeRead)
@@ -387,10 +410,11 @@ def get_debt_to_income(
     financial_account_id: int | None = None,
     category_id: int | None = None,
     tag_id: int | None = None,
+    without_account: bool = False,
 ) -> DebtToIncomeRead:
     del start_date
     return debt_to_income(
-        session, end_date, financial_account_id, category_id, tag_id
+        session, end_date, financial_account_id, category_id, tag_id, without_account
     )
 
 
@@ -402,8 +426,11 @@ def get_cash_flow(
     financial_account_id: int | None = None,
     category_id: int | None = None,
     tag_id: int | None = None,
+    without_account: bool = False,
 ) -> list[CashFlowPoint]:
-    return cash_flow(session, start_date, end_date, financial_account_id, category_id, tag_id)
+    return cash_flow(
+        session, start_date, end_date, financial_account_id, category_id, tag_id, without_account
+    )
 
 
 @router.get("/dashboard/cash-flow-table", response_model=CashFlowTableRead)
@@ -414,9 +441,10 @@ def get_cash_flow_table(
     financial_account_id: int | None = None,
     category_id: int | None = None,
     tag_id: int | None = None,
+    without_account: bool = False,
 ) -> CashFlowTableRead:
     return cash_flow_table(
-        session, start_date, end_date, financial_account_id, category_id, tag_id
+        session, start_date, end_date, financial_account_id, category_id, tag_id, without_account
     )
 
 
@@ -429,9 +457,17 @@ def get_period_comparison(
     category_id: int | None = None,
     tag_id: int | None = None,
     metric: str = "expenses",
+    without_account: bool = False,
 ) -> list[PeriodComparisonPoint]:
     return period_comparison(
-        session, start_date, end_date, financial_account_id, category_id, tag_id, metric
+        session,
+        start_date,
+        end_date,
+        financial_account_id,
+        category_id,
+        tag_id,
+        metric,
+        without_account,
     )
 
 
@@ -443,9 +479,10 @@ def get_category_spending(
     financial_account_id: int | None = None,
     category_id: int | None = None,
     tag_id: int | None = None,
+    without_account: bool = False,
 ) -> list[CategorySpendingPoint]:
     return category_spending(
-        session, start_date, end_date, financial_account_id, category_id, tag_id
+        session, start_date, end_date, financial_account_id, category_id, tag_id, without_account
     )
 
 
@@ -457,9 +494,10 @@ def get_expense_structure(
     financial_account_id: int | None = None,
     category_id: int | None = None,
     tag_id: int | None = None,
+    without_account: bool = False,
 ) -> list[CategorySpendingPoint]:
     return expense_structure(
-        session, start_date, end_date, financial_account_id, category_id, tag_id
+        session, start_date, end_date, financial_account_id, category_id, tag_id, without_account
     )
 
 
@@ -471,9 +509,21 @@ def get_recent_transactions(
     financial_account_id: int | None = None,
     category_id: int | None = None,
     tag_id: int | None = None,
+    without_account: bool = False,
 ) -> list[TransactionRead]:
     return list_transactions(
-        session, 8, 0, financial_account_id, category_id, None, None, start_date, end_date, tag_id
+        session,
+        8,
+        0,
+        financial_account_id,
+        category_id,
+        None,
+        None,
+        start_date,
+        end_date,
+        tag_id,
+        "date_desc",
+        without_account,
     )
 
 
@@ -500,6 +550,7 @@ def get_transactions(
     end_date: date | None = None,
     tag_id: int | None = None,
     sort: str = "date_desc",
+    without_account: bool = False,
 ) -> list[TransactionRead]:
     return list_transactions(
         session,
@@ -513,6 +564,38 @@ def get_transactions(
         end_date,
         tag_id,
         sort,
+        without_account,
+    )
+
+
+@router.get("/transactions-timeline", response_model=list[TransactionTimelineRead])
+def get_transactions_timeline(
+    session: SessionDependency,
+    limit: int = 50,
+    offset: int = 0,
+    financial_account_id: int | None = None,
+    category_id: int | None = None,
+    kind: TransactionKind | None = None,
+    search: str | None = None,
+    start_date: date | None = None,
+    end_date: date | None = None,
+    tag_id: int | None = None,
+    sort: str = "date_desc",
+    without_account: bool = False,
+) -> list[TransactionTimelineRead]:
+    return list_transaction_timeline(
+        session,
+        limit,
+        offset,
+        financial_account_id,
+        category_id,
+        kind,
+        search,
+        start_date,
+        end_date,
+        tag_id,
+        sort,
+        without_account,
     )
 
 
@@ -527,6 +610,7 @@ def export_transactions(
     end_date: date | None = None,
     tag_id: int | None = None,
     sort: str = "date_asc",
+    without_account: bool = False,
 ) -> Response:
     settings = ensure_settings(session)
     content, filename = export_transactions_csv(
@@ -540,6 +624,7 @@ def export_transactions(
         end_date,
         tag_id,
         sort,
+        without_account,
     )
     return Response(
         content=content,
@@ -550,7 +635,24 @@ def export_transactions(
 
 @router.post("/transactions", response_model=TransactionRead, status_code=201)
 def post_transaction(payload: TransactionCreate, session: SessionDependency) -> TransactionRead:
-    return create_transaction(session, TransactionInput(**payload.model_dump()))
+    values = payload.model_dump(exclude={"recurrence"})
+    if payload.recurrence is None:
+        return create_transaction(session, TransactionInput(**values))
+    result = create_recurring_transaction(
+        session,
+        RecurringTransactionInput(
+            **values,
+            frequency=payload.recurrence.frequency,
+            end_date=payload.recurrence.end_date,
+            is_debt_payment=payload.recurrence.is_debt_payment,
+        ),
+    )
+    return result.transactions[0]
+
+
+@router.post("/recurrences/materialize-due", response_model=RecurrenceMaterializeRead)
+def post_materialize_due(session: SessionDependency) -> RecurrenceMaterializeRead:
+    return RecurrenceMaterializeRead(created_count=materialize_due_recurrences(session))
 
 
 @router.get("/transactions/{transaction_id}", response_model=TransactionRead)
@@ -560,14 +662,31 @@ def get_transaction_route(transaction_id: int, session: SessionDependency) -> Tr
 
 @router.patch("/transactions/{transaction_id}", response_model=TransactionRead)
 def patch_transaction(
-    transaction_id: int, payload: TransactionUpdate, session: SessionDependency
+    transaction_id: int,
+    payload: TransactionUpdate,
+    session: SessionDependency,
+    scope: str = "this_occurrence",
 ) -> TransactionRead:
-    return update_transaction(session, transaction_id, **payload.model_dump(exclude_unset=True))
+    return update_recurring_transaction(
+        session, transaction_id, scope, **payload.model_dump(exclude_unset=True)
+    )
 
 
 @router.delete("/transactions/{transaction_id}", status_code=204)
-def remove_transaction(transaction_id: int, session: SessionDependency) -> None:
-    delete_transaction(session, transaction_id)
+def remove_transaction(
+    transaction_id: int, session: SessionDependency, scope: str = "this_occurrence"
+) -> None:
+    delete_recurring_transaction(session, transaction_id, scope)
+
+
+@router.post("/recurrences/{payment_id}/skip", response_model=PlannedPaymentRead)
+def post_skip_recurrence(payment_id: int, session: SessionDependency) -> PlannedPaymentRead:
+    return skip_recurrence_occurrence(session, payment_id)
+
+
+@router.post("/recurrences/{payment_id}/cancel", response_model=PlannedPaymentRead)
+def post_cancel_recurrence(payment_id: int, session: SessionDependency) -> PlannedPaymentRead:
+    return cancel_recurrence(session, payment_id)
 
 
 @router.post("/transfers", response_model=list[TransactionRead], status_code=201)

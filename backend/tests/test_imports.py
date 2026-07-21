@@ -56,6 +56,48 @@ def signed_mapping(account_id: int) -> ImportMapping:
     )
 
 
+def test_import_accepts_general_but_rejects_unknown_named_account(
+    session: Session,
+    references: tuple[FinancialAccount, Category, Category],
+    monkeypatch,
+    tmp_path,
+) -> None:
+    monkeypatch.setenv("POCKETCOIN_DATA_DIR", str(tmp_path))
+    preview = create_preview(
+        session,
+        "general.csv",
+        (
+            b"Date,Description,Amount,Account\n"
+            b"2026-07-01,General expense,-10.00,\n"
+            b"2026-07-02,Unknown expense,-5.00,Missing\n"
+        ),
+    )
+    mapping = ImportMapping(
+        date_column="Date",
+        description_column="Description",
+        amount_mode="signed",
+        amount_column="Amount",
+        date_format="iso",
+        decimal_separator="dot",
+        account_mode="column",
+        account_column="Account",
+    )
+
+    validated = validate_preview(session, preview.preview_id, mapping)
+
+    assert validated.rows[0].eligible is True
+    assert validated.rows[0].financial_account_id is None
+    assert validated.rows[1].issues == ["Financial account is unknown or inactive."]
+
+    summary = commit_preview(session, preview.preview_id, mapping, [2])
+    imported = session.scalar(
+        select(Transaction).where(Transaction.import_batch_id == preview.preview_id)
+    )
+    assert summary.imported_count == 1
+    assert imported is not None
+    assert imported.financial_account_id is None
+
+
 def test_preview_detects_encoding_delimiter_sanitizes_and_enforces_bounds(
     session: Session, references: tuple[FinancialAccount, Category, Category], monkeypatch, tmp_path
 ) -> None:

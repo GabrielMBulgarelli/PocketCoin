@@ -80,6 +80,7 @@ def list_budget_progress(
     financial_account_id: int | None = None,
     category_id: int | None = None,
     tag_id: int | None = None,
+    without_account: bool = False,
 ) -> list[dict[str, object]]:
     month = selected_date.replace(day=1)
     end = selected_date.replace(day=monthrange(selected_date.year, selected_date.month)[1])
@@ -96,6 +97,8 @@ def list_budget_progress(
         )
         if financial_account_id is not None:
             spending = spending.where(Transaction.financial_account_id == financial_account_id)
+        if without_account:
+            spending = spending.where(Transaction.financial_account_id.is_(None))
         if tag_id is not None:
             spending = spending.join(transaction_tags).where(transaction_tags.c.tag_id == tag_id)
         spent = int(session.scalar(spending) or 0)

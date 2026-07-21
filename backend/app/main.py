@@ -9,6 +9,7 @@ from fastapi.staticfiles import StaticFiles
 from app.database import SessionLocal
 from app.routers import router
 from app.services.imports import expire_pending_previews
+from app.services.planned_payments import materialize_due_recurrences
 from app.services.reference_data import DomainValidationError, NotFoundError
 
 
@@ -16,6 +17,7 @@ from app.services.reference_data import DomainValidationError, NotFoundError
 async def lifespan(_: FastAPI):
     with SessionLocal() as session:
         expire_pending_previews(session)
+        materialize_due_recurrences(session)
         session.commit()
     yield
 

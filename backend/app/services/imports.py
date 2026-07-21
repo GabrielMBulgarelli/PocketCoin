@@ -308,8 +308,6 @@ def _validate_mapping(frame: pl.DataFrame, mapping: ImportMapping) -> None:
     missing.extend(column for column in optional if column and column not in frame.columns)
     if missing:
         raise DomainValidationError("Every mapped column must exist in the CSV.", "mapping")
-    if mapping.account_mode == "fixed" and mapping.financial_account_id is None:
-        raise DomainValidationError("Choose a financial account.", "financial_account_id")
 
 
 def validate_preview(session: Session, preview_id: str, mapping: ImportMapping) -> ValidationResult:
@@ -330,7 +328,11 @@ def validate_preview(session: Session, preview_id: str, mapping: ImportMapping) 
         if mapping.financial_account_id
         else None
     )
-    if mapping.account_mode == "fixed" and (fixed_account is None or not fixed_account.is_active):
+    if (
+        mapping.account_mode == "fixed"
+        and mapping.financial_account_id is not None
+        and (fixed_account is None or not fixed_account.is_active)
+    ):
         raise DomainValidationError("Choose an active financial account.", "financial_account_id")
     existing_external = {
         (account_id, external_id.strip())
@@ -392,9 +394,9 @@ def validate_preview(session: Session, preview_id: str, mapping: ImportMapping) 
         account = fixed_account
         if mapping.account_mode == "column":
             name = str(raw.get(mapping.account_column or "", "")).strip()
-            account = accounts_by_name.get(name.casefold())
-            if account is None:
-                row.issues.append("Financial account is blank, unknown, or inactive.")
+            account = accounts_by_name.get(name.casefold()) if name else None
+            if name and account is None:
+                row.issues.append("Financial account is unknown or inactive.")
         if account:
             row.financial_account_id, row.financial_account_name = account.id, account.name
         if row.direction:
@@ -423,13 +425,7 @@ def validate_preview(session: Session, preview_id: str, mapping: ImportMapping) 
             else ""
         )
         row.external_id = external or None
-        if (
-            row.financial_account_id
-            and row.transaction_date
-            and row.amount_minor
-            and row.direction
-            and row.description
-        ):
+        if row.transaction_date and row.amount_minor and row.direction and row.description:
             row.fingerprint = _fallback_fingerprint(row)
             key: tuple[str, object] = (
                 ("external", (row.financial_account_id, row.external_id))

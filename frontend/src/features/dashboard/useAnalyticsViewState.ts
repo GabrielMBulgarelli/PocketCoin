@@ -38,10 +38,12 @@ function readHash(route: AnalyticsRoute, defaultMetric: ComparisonMetric) {
     start_date: isIsoDate(params.get("from")) ? params.get("from")! : fallback.start_date,
     end_date: isIsoDate(params.get("to")) ? params.get("to")! : fallback.end_date,
   };
-  const financialAccountId = positiveId(params.get("account"));
+  const requestedAccount = params.get("account");
+  const financialAccountId = positiveId(requestedAccount);
   const categoryId = positiveId(params.get("category"));
   const tagId = positiveId(params.get("tag"));
-  if (financialAccountId) filters.financial_account_id = financialAccountId;
+  if (requestedAccount === "general") filters.without_account = true;
+  else if (financialAccountId) filters.financial_account_id = financialAccountId;
   if (categoryId) filters.category_id = categoryId;
   if (tagId) filters.tag_id = tagId;
   return { filters, metric: requestedMetric && metrics.includes(requestedMetric) ? requestedMetric : defaultMetric };
@@ -61,7 +63,8 @@ export function useAnalyticsViewState(route: AnalyticsRoute, defaultMetric: Comp
   useEffect(() => {
     if (hashPath() !== route) return;
     const params = new URLSearchParams({ from: filters.start_date, to: filters.end_date, metric });
-    if (filters.financial_account_id) params.set("account", String(filters.financial_account_id));
+    if (filters.without_account) params.set("account", "general");
+    else if (filters.financial_account_id) params.set("account", String(filters.financial_account_id));
     if (filters.category_id) params.set("category", String(filters.category_id));
     if (filters.tag_id) params.set("tag", String(filters.tag_id));
     window.history.replaceState(window.history.state, "", `#${route}?${params.toString()}`);

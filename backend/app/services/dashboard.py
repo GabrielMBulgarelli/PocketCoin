@@ -33,6 +33,7 @@ def _transactions(
     financial_account_id: int | None = None,
     category_id: int | None = None,
     tag_id: int | None = None,
+    without_account: bool = False,
 ) -> list[Transaction]:
     _validate_dates(start_date, end_date)
     statement = select(Transaction).where(
@@ -40,6 +41,8 @@ def _transactions(
     )
     if financial_account_id is not None:
         statement = statement.where(Transaction.financial_account_id == financial_account_id)
+    elif without_account:
+        statement = statement.where(Transaction.financial_account_id.is_(None))
     if category_id is not None:
         statement = statement.where(Transaction.category_id == category_id)
     if tag_id is not None:
@@ -57,9 +60,7 @@ def _signed(account: FinancialAccount, transaction: Transaction) -> int:
     return transaction.amount_minor if transaction.kind in positive else -transaction.amount_minor
 
 
-def _liability_debt_at(
-    session: Session, account: FinancialAccount, end_date: date
-) -> int:
+def _liability_debt_at(session: Session, account: FinancialAccount, end_date: date) -> int:
     if account.opening_balance_date > end_date:
         return 0
     debt = account.opening_balance_minor
@@ -73,7 +74,10 @@ def _liability_debt_at(
 
 
 def credit_utilization(
-    session: Session, end_date: date, financial_account_id: int | None = None
+    session: Session,
+    end_date: date,
+    financial_account_id: int | None = None,
+    without_account: bool = False,
 ) -> dict[str, bool | int | float | None]:
     statement = select(FinancialAccount).where(
         FinancialAccount.kind.in_(
@@ -83,7 +87,9 @@ def credit_utilization(
     )
     if financial_account_id is not None:
         statement = statement.where(FinancialAccount.id == financial_account_id)
-    liabilities = list(session.scalars(statement.order_by(FinancialAccount.id)))
+    liabilities = (
+        [] if without_account else list(session.scalars(statement.order_by(FinancialAccount.id)))
+    )
     credit_accounts = [
         account
         for account in liabilities
@@ -112,6 +118,7 @@ def credit_account_utilization(
     start_date: date,
     end_date: date,
     financial_account_id: int | None = None,
+    without_account: bool = False,
 ) -> list[dict[str, object]]:
     _validate_dates(start_date, end_date)
     statement = select(FinancialAccount).where(
@@ -120,6 +127,8 @@ def credit_account_utilization(
     )
     if financial_account_id is not None:
         statement = statement.where(FinancialAccount.id == financial_account_id)
+    if without_account:
+        return []
     rows: list[dict[str, object]] = []
     for account in session.scalars(statement.order_by(FinancialAccount.id)):
         limit = account.credit_limit_minor or 0
@@ -155,6 +164,7 @@ def recurring_debts(
     session: Session,
     financial_account_id: int | None = None,
     category_id: int | None = None,
+    without_account: bool = False,
 ) -> dict[str, object]:
     statement = select(PlannedPayment).where(
         PlannedPayment.status == PlannedPaymentStatus.PENDING,
@@ -168,9 +178,9 @@ def recurring_debts(
         ),
     )
     if financial_account_id is not None:
-        statement = statement.where(
-            PlannedPayment.financial_account_id == financial_account_id
-        )
+        statement = statement.where(PlannedPayment.financial_account_id == financial_account_id)
+    elif without_account:
+        statement = statement.where(PlannedPayment.financial_account_id.is_(None))
     if category_id is not None:
         statement = statement.where(PlannedPayment.category_id == category_id)
     items: list[dict[str, object]] = []
@@ -189,16 +199,12 @@ def recurring_debts(
                 "title": payment.title,
                 "recurrence": payment.recurrence,
                 "amount_minor": payment.amount_minor,
-                "monthly_amount_minor": int(
-                    monthly.quantize(Decimal("1"), rounding=ROUND_HALF_UP)
-                ),
+                "monthly_amount_minor": int(monthly.quantize(Decimal("1"), rounding=ROUND_HALF_UP)),
             }
         )
     return {
         "items": items,
-        "monthly_total_minor": int(
-            exact_total.quantize(Decimal("1"), rounding=ROUND_HALF_UP)
-        ),
+        "monthly_total_minor": int(exact_total.quantize(Decimal("1"), rounding=ROUND_HALF_UP)),
     }
 
 
@@ -208,9 +214,10 @@ def debt_to_income(
     financial_account_id: int | None = None,
     category_id: int | None = None,
     tag_id: int | None = None,
+    without_account: bool = False,
 ) -> dict[str, int | float | None]:
     monthly_debt = int(
-        recurring_debts(session, financial_account_id, category_id)[
+        recurring_debts(session, financial_account_id, category_id, without_account)[
             "monthly_total_minor"
         ]
     )
@@ -225,15 +232,14 @@ def debt_to_income(
             financial_account_id,
             category_id,
             tag_id,
+            without_account,
         )
         if transaction.kind == TransactionKind.INCOME
     )
     return {
         "monthly_debt_minor": monthly_debt,
         "gross_income_minor": gross_income,
-        "ratio_percentage": round(monthly_debt / gross_income * 100, 1)
-        if gross_income
-        else None,
+        "ratio_percentage": round(monthly_debt / gross_income * 100, 1) if gross_income else None,
     }
 
 
@@ -243,6 +249,7 @@ def balance_forecast(
     financial_account_id: int | None = None,
     category_id: int | None = None,
     tag_id: int | None = None,
+    without_account: bool = False,
 ) -> dict[str, object]:
     lookback_days = 90
     horizon_days = 30
@@ -253,19 +260,17 @@ def balance_forecast(
         FinancialAccount.opening_balance_date <= forecast_start
     )
     if financial_account_id is not None:
-        accounts_statement = accounts_statement.where(
-            FinancialAccount.id == financial_account_id
-        )
-    accounts = list(session.scalars(accounts_statement))
+        accounts_statement = accounts_statement.where(FinancialAccount.id == financial_account_id)
+    accounts = [] if without_account else list(session.scalars(accounts_statement))
     account_map = {account.id: account for account in accounts}
     starting_balance = sum(account.opening_balance_minor for account in accounts)
-    balance_statement = select(Transaction).where(
-        Transaction.transaction_date <= forecast_start
-    )
+    balance_statement = select(Transaction).where(Transaction.transaction_date <= forecast_start)
     if financial_account_id is not None:
         balance_statement = balance_statement.where(
             Transaction.financial_account_id == financial_account_id
         )
+    elif without_account:
+        balance_statement = balance_statement.where(Transaction.financial_account_id.is_(None))
     for transaction in session.scalars(balance_statement):
         account = account_map.get(transaction.financial_account_id)
         if account is not None:
@@ -278,12 +283,12 @@ def balance_forecast(
         financial_account_id,
         category_id,
         tag_id,
+        without_account,
     )
     historical_expense = sum(
         item.amount_minor
         for item in history
-        if item.kind == TransactionKind.EXPENSE
-        and item.source != TransactionSource.PLANNED_PAYMENT
+        if item.kind == TransactionKind.EXPENSE and item.source != TransactionSource.PLANNED_PAYMENT
     )
     average_daily = int(
         (Decimal(historical_expense) / Decimal(lookback_days)).quantize(
@@ -298,6 +303,8 @@ def balance_forecast(
         payment_statement = payment_statement.where(
             PlannedPayment.financial_account_id == financial_account_id
         )
+    elif without_account:
+        payment_statement = payment_statement.where(PlannedPayment.financial_account_id.is_(None))
     if category_id is not None:
         payment_statement = payment_statement.where(PlannedPayment.category_id == category_id)
     planned_income = 0
@@ -353,9 +360,10 @@ def dashboard_summary(
     financial_account_id: int | None = None,
     category_id: int | None = None,
     tag_id: int | None = None,
+    without_account: bool = False,
 ) -> dict[str, int | float | None]:
     transactions = _transactions(
-        session, start_date, end_date, financial_account_id, category_id, tag_id
+        session, start_date, end_date, financial_account_id, category_id, tag_id, without_account
     )
     income = sum(item.amount_minor for item in transactions if item.kind == TransactionKind.INCOME)
     expense = sum(
@@ -366,7 +374,7 @@ def dashboard_summary(
     )
     if financial_account_id is not None:
         account_statement = account_statement.where(FinancialAccount.id == financial_account_id)
-    accounts = list(session.scalars(account_statement))
+    accounts = [] if without_account else list(session.scalars(account_statement))
     balance = sum(account.opening_balance_minor for account in accounts)
     account_map = {account.id: account for account in accounts}
     balance_statement = select(Transaction).where(Transaction.transaction_date <= end_date)
@@ -374,6 +382,8 @@ def dashboard_summary(
         balance_statement = balance_statement.where(
             Transaction.financial_account_id == financial_account_id
         )
+    elif without_account:
+        balance_statement = balance_statement.where(Transaction.financial_account_id.is_(None))
     for transaction in session.scalars(balance_statement):
         account = account_map.get(transaction.financial_account_id)
         if account is not None:
@@ -394,10 +404,11 @@ def cash_flow(
     financial_account_id: int | None = None,
     category_id: int | None = None,
     tag_id: int | None = None,
+    without_account: bool = False,
 ) -> list[dict[str, str | int]]:
     totals: dict[date, list[int]] = {}
     for item in _transactions(
-        session, start_date, end_date, financial_account_id, category_id, tag_id
+        session, start_date, end_date, financial_account_id, category_id, tag_id, without_account
     ):
         day = totals.setdefault(item.transaction_date, [0, 0])
         if item.kind == TransactionKind.INCOME:
@@ -418,11 +429,7 @@ def cash_flow(
 def _rounded_average(total: int, divisor: int) -> int:
     if divisor == 0:
         return 0
-    return int(
-        (Decimal(total) / Decimal(divisor)).quantize(
-            Decimal("1"), rounding=ROUND_HALF_UP
-        )
-    )
+    return int((Decimal(total) / Decimal(divisor)).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
 
 
 def cash_flow_table(
@@ -432,6 +439,7 @@ def cash_flow_table(
     financial_account_id: int | None = None,
     category_id: int | None = None,
     tag_id: int | None = None,
+    without_account: bool = False,
 ) -> dict[str, object]:
     _validate_dates(start_date, end_date)
     period_days = (end_date - start_date).days + 1
@@ -446,6 +454,7 @@ def cash_flow_table(
             financial_account_id,
             category_id,
             tag_id,
+            without_account,
         )
         return (
             [row for row in rows if row.kind == TransactionKind.INCOME],
@@ -488,11 +497,12 @@ def category_spending(
     financial_account_id: int | None = None,
     category_id: int | None = None,
     tag_id: int | None = None,
+    without_account: bool = False,
 ) -> list[dict[str, str | int]]:
     names = {item.id: item.name for item in session.scalars(select(Category))}
     totals: dict[int, int] = {}
     for item in _transactions(
-        session, start_date, end_date, financial_account_id, category_id, tag_id
+        session, start_date, end_date, financial_account_id, category_id, tag_id, without_account
     ):
         if item.kind == TransactionKind.EXPENSE and item.category_id is not None:
             totals[item.category_id] = totals.get(item.category_id, 0) + item.amount_minor
@@ -509,9 +519,10 @@ def expense_structure(
     financial_account_id: int | None = None,
     category_id: int | None = None,
     tag_id: int | None = None,
+    without_account: bool = False,
 ) -> list[dict[str, str | int]]:
     rows = category_spending(
-        session, start_date, end_date, financial_account_id, category_id, tag_id
+        session, start_date, end_date, financial_account_id, category_id, tag_id, without_account
     )
     if len(rows) <= 5:
         return rows
@@ -529,6 +540,7 @@ def period_comparison(
     category_id: int | None = None,
     tag_id: int | None = None,
     metric: str = "expenses",
+    without_account: bool = False,
 ) -> list[dict[str, str | int]]:
     _validate_dates(start_date, end_date)
     if metric not in {"expenses", "income", "cash_flow"}:
@@ -548,7 +560,13 @@ def period_comparison(
     for period_start, period_end in ranges:
         totals: dict[date, int] = {}
         for item in _transactions(
-            session, period_start, period_end, financial_account_id, category_id, tag_id
+            session,
+            period_start,
+            period_end,
+            financial_account_id,
+            category_id,
+            tag_id,
+            without_account,
         ):
             value = 0
             if metric == "expenses" and item.kind == TransactionKind.EXPENSE:

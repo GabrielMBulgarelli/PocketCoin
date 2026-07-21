@@ -100,6 +100,34 @@ function stubApi() {
 }
 
 describe("App", () => {
+  it("redirects the retired planned-payments route to Transactions", async () => {
+    window.history.replaceState(null, "", "#/planned-payments");
+    stubApi();
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+
+    render(<QueryClientProvider client={queryClient}><App /></QueryClientProvider>);
+
+    expect(await screen.findByRole("heading", { name: "Transactions" })).toBeInTheDocument();
+    expect(window.location.hash).toBe("#/transactions");
+  });
+
+  it("redirects the retired planned-payments route during client navigation", async () => {
+    window.history.replaceState(null, "", "#/dashboard");
+    stubApi();
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+
+    render(<QueryClientProvider client={queryClient}><App /></QueryClientProvider>);
+    expect(await screen.findByRole("heading", { name: "Dashboard" })).toBeInTheDocument();
+
+    act(() => {
+      window.history.replaceState(null, "", "#/planned-payments");
+      window.dispatchEvent(new HashChangeEvent("hashchange"));
+    });
+
+    expect(await screen.findByRole("heading", { name: "Transactions" })).toBeInTheDocument();
+    expect(window.location.hash).toBe("#/transactions");
+  });
+
   it("resolves a view when its hash includes analytical parameters", async () => {
     window.history.replaceState(null, "", "#/reports?from=2026-07-01&to=2026-07-19&metric=income");
     stubApi();

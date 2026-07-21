@@ -11,9 +11,11 @@ from app.models import (
     CategoryDirection,
     FinancialAccount,
     PlannedPayment,
+    PlannedPaymentRecurrence,
     PlannedPaymentStatus,
     Tag,
     Theme,
+    planned_payment_tags,
 )
 
 
@@ -180,7 +182,9 @@ def update_financial_account(
         ).limit(1)
     ) is not None:
         raise DomainValidationError(
-            "Financial account is referenced by a pending planned payment.", "is_active"
+            "A pending planned payment or active recurrence uses this financial account. "
+            "Edit or cancel it first.",
+            "is_active",
         )
     if "name" in values:
         account.name = normalized_name(str(values["name"]))
@@ -218,6 +222,18 @@ def update_category(session: Session, category_id: int, **values: object) -> Cat
         raise NotFoundError("Category not found.")
     name = normalized_name(str(values["name"])) if "name" in values else category.name
     is_active = bool(values["is_active"]) if "is_active" in values else category.is_active
+    if not is_active and session.scalar(
+        select(PlannedPayment.id)
+        .where(
+            PlannedPayment.category_id == category_id,
+            PlannedPayment.status == PlannedPaymentStatus.PENDING,
+            PlannedPayment.recurrence != PlannedPaymentRecurrence.NONE,
+        )
+        .limit(1)
+    ) is not None:
+        raise DomainValidationError(
+            "An active recurrence uses this category. Edit or cancel it first.", "is_active"
+        )
     if is_active and active_category_name_exists(session, name, category.direction, category.id):
         raise DomainValidationError("An active category with this name already exists.", "name")
     category.name = name
@@ -236,6 +252,22 @@ def update_tag(session: Session, tag_id: int, **values: object) -> Tag:
         raise NotFoundError("Tag not found.")
     name = normalized_name(str(values["name"])) if "name" in values else tag.name
     is_active = bool(values["is_active"]) if "is_active" in values else tag.is_active
+    if not is_active and session.scalar(
+        select(PlannedPayment.id)
+        .join(
+            planned_payment_tags,
+            planned_payment_tags.c.planned_payment_id == PlannedPayment.id,
+        )
+        .where(
+            planned_payment_tags.c.tag_id == tag_id,
+            PlannedPayment.status == PlannedPaymentStatus.PENDING,
+            PlannedPayment.recurrence != PlannedPaymentRecurrence.NONE,
+        )
+        .limit(1)
+    ) is not None:
+        raise DomainValidationError(
+            "An active recurrence uses this tag. Edit or cancel it first.", "is_active"
+        )
     if is_active and active_tag_name_exists(session, name, tag.id):
         raise DomainValidationError("An active tag with this name already exists.", "name")
     tag.name = name

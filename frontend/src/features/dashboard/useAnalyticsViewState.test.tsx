@@ -25,6 +25,16 @@ describe("useAnalyticsViewState", () => {
     expect(result.current.metric).toBe("income");
   });
 
+  it("hydrates and serializes the General account without a sentinel identifier", () => {
+    window.history.replaceState(null, "", "#/dashboard?from=2026-07-01&to=2026-07-20&account=general&metric=expenses");
+
+    const { result } = renderHook(() => useAnalyticsViewState("/dashboard", "expenses"));
+
+    expect(result.current.filters).toEqual(expect.objectContaining({ without_account: true }));
+    expect(result.current.filters.financial_account_id).toBeUndefined();
+    expect(window.location.hash).toContain("account=general");
+  });
+
   it("normalizes invalid values and updates the URL without adding history entries", () => {
     window.history.replaceState(null, "", "#/dashboard?from=2026-02-30&to=nope&account=0&category=-2&tag=x&metric=unknown");
     const replaceState = vi.spyOn(window.history, "replaceState");

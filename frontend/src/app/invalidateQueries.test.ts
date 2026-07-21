@@ -9,7 +9,7 @@ describe("financial query invalidation", () => {
     expect(mutationInvalidations.accounts).toEqual(["financialAccounts", "transactions", "dashboard", "reports"]);
     expect(mutationInvalidations.categories).toEqual(["categories", "transactions", "dashboard", "reports"]);
     expect(mutationInvalidations.tags).toEqual(["tags", "transactions", "dashboard", "reports"]);
-    expect(mutationInvalidations.transactions).toEqual(["transactions", "financialAccounts", "budgets", "dashboard", "reports"]);
+    expect(mutationInvalidations.transactions).toEqual(["transactions", "financialAccounts", "budgets", "plannedPayments", "dashboard", "reports"]);
     expect(mutationInvalidations.plannedPayments).toEqual(["plannedPayments", "dashboard", "reports"]);
     expect(mutationInvalidations.markPaid).toEqual(["plannedPayments", "dashboard", "reports", "transactions", "financialAccounts", "budgets"]);
     expect(mutationInvalidations.imports).toEqual(["imports", "transactions", "financialAccounts", "budgets", "dashboard", "reports"]);

@@ -9,11 +9,12 @@ type Ref = { id: number; name: string; is_active: boolean };
 export type CatalogState = { data?: Ref[]; isPending: boolean; isError: boolean; retry: () => void };
 type ChartProps = { formatMinor: (value: number) => string };
 
-function CatalogSelect({ label, value, catalog, allLabel, onChange }: { label: string; value?: number; catalog: CatalogState; allLabel: string; onChange: (value: string) => void }) {
+function CatalogSelect({ label, value, catalog, allLabel, generalLabel, onChange }: { label: string; value?: number | string; catalog: CatalogState; allLabel: string; generalLabel?: string; onChange: (value: string) => void }) {
   const items = catalog.data ?? [];
-  const selectedMissing = Boolean(value && !items.some((item) => item.id === value));
+  const selectedMissing = typeof value === "number" && !items.some((item) => item.id === value);
   return <label className="grid min-w-0 gap-1 text-xs font-medium text-muted-foreground">{label}<select className={control} disabled={catalog.isPending || catalog.isError} value={value ?? ""} onChange={(event) => onChange(event.target.value)}>
     <option value="">{catalog.isPending ? `Loading ${label.toLowerCase()}…` : catalog.isError ? `${label} unavailable` : allLabel}</option>
+    {generalLabel && <option value="general">{generalLabel}</option>}
     {selectedMissing && <option value={value}>Selected {label.toLowerCase()} unavailable</option>}
     {items.filter((item) => item.is_active).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
   </select></label>;
@@ -21,12 +22,17 @@ function CatalogSelect({ label, value, catalog, allLabel, onChange }: { label: s
 
 export function DashboardFiltersControl({ filters, onChange, accounts, categories, tags, onReset, label = "Dashboard filters" }: { filters: DashboardFilters; onChange: (filters: DashboardFilters) => void; accounts: CatalogState; categories: CatalogState; tags: CatalogState; onReset: () => void; label?: string }) {
   const update = (key: keyof DashboardFilters, value: string) => onChange({ ...filters, [key]: value ? (key.endsWith("_id") ? Number(value) : value) : undefined } as DashboardFilters);
+  const updateAccount = (value: string) => onChange({
+    ...filters,
+    financial_account_id: value && value !== "general" ? Number(value) : undefined,
+    without_account: value === "general" ? true : undefined,
+  });
   const failures = [["accounts", accounts], ["categories", categories], ["tags", tags]].filter(([, catalog]) => (catalog as CatalogState).isError);
   return <section className="min-w-0 rounded-xl border bg-card p-4 shadow-sm" aria-label={label}>
     <div className="grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-5">
       <label className="grid min-w-0 gap-1 text-xs font-medium text-muted-foreground">From<input className={control} type="date" value={filters.start_date} onChange={(event) => update("start_date", event.target.value)} /></label>
       <label className="grid min-w-0 gap-1 text-xs font-medium text-muted-foreground">To<input className={control} type="date" value={filters.end_date} onChange={(event) => update("end_date", event.target.value)} /></label>
-      <CatalogSelect label="Account" value={filters.financial_account_id} catalog={accounts} allLabel="All accounts" onChange={(value) => update("financial_account_id", value)} />
+      <CatalogSelect label="Account" value={filters.without_account ? "general" : filters.financial_account_id} catalog={accounts} allLabel="All accounts" generalLabel="General — no specific account" onChange={updateAccount} />
       <CatalogSelect label="Category" value={filters.category_id} catalog={categories} allLabel="All categories" onChange={(value) => update("category_id", value)} />
       <CatalogSelect label="Tag" value={filters.tag_id} catalog={tags} allLabel="All tags" onChange={(value) => update("tag_id", value)} />
     </div>

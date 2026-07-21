@@ -1,4 +1,5 @@
 from datetime import date, datetime
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -137,7 +138,7 @@ class TagUpdate(BaseModel):
 
 class TransactionRead(Schema):
     id: int
-    financial_account_id: int
+    financial_account_id: int | None
     category_id: int | None
     transaction_date: date
     kind: TransactionKind
@@ -146,12 +147,27 @@ class TransactionRead(Schema):
     notes: str | None
     transfer_group_id: str | None
     source: TransactionSource
+    planned_payment_id: int | None
+    scheduled_for: date | None
     created_at: datetime
     updated_at: datetime
 
 
+class RecurrenceCreate(BaseModel):
+    frequency: PlannedPaymentRecurrence
+    end_date: date | None = None
+    is_debt_payment: bool = False
+
+    @field_validator("frequency")
+    @classmethod
+    def frequency_must_repeat(cls, value: PlannedPaymentRecurrence) -> PlannedPaymentRecurrence:
+        if value == PlannedPaymentRecurrence.NONE:
+            raise ValueError("frequency must be weekly, monthly, or yearly")
+        return value
+
+
 class TransactionCreate(BaseModel):
-    financial_account_id: int
+    financial_account_id: int | None = None
     category_id: int
     transaction_date: date
     kind: TransactionKind
@@ -159,6 +175,7 @@ class TransactionCreate(BaseModel):
     description: str = Field(min_length=1, max_length=250)
     notes: str | None = Field(default=None, max_length=2_000)
     tag_ids: list[int] = Field(default_factory=list)
+    recurrence: RecurrenceCreate | None = None
 
 
 class TransactionUpdate(BaseModel):
@@ -170,6 +187,26 @@ class TransactionUpdate(BaseModel):
     description: str | None = Field(default=None, min_length=1, max_length=250)
     notes: str | None = Field(default=None, max_length=2_000)
     tag_ids: list[int] | None = None
+
+
+class TransactionTimelineRead(BaseModel):
+    row_type: Literal["transaction", "scheduled"]
+    id: int
+    financial_account_id: int | None
+    category_id: int | None
+    transaction_date: date
+    kind: TransactionKind
+    amount_minor: int
+    description: str
+    notes: str | None
+    transfer_group_id: str | None
+    planned_payment_id: int | None
+    scheduled_for: date | None
+    recurrence: PlannedPaymentRecurrence | None
+    end_date: date | None
+    remaining_occurrences: int | None
+    is_debt_payment: bool
+    needs_attention: bool
 
 
 class DashboardSummaryRead(BaseModel):
@@ -321,12 +358,14 @@ class PlannedPaymentRead(Schema):
     due_date: date
     status: PlannedPaymentStatus
     recurrence: PlannedPaymentRecurrence
+    end_date: date | None
     is_debt_payment: bool
     notes: str | None
     last_paid_due_date: date | None
     last_transaction_id: int | None
     created_at: datetime
     updated_at: datetime
+    needs_attention: bool
 
 
 class PlannedPaymentCreate(BaseModel):
@@ -339,6 +378,8 @@ class PlannedPaymentCreate(BaseModel):
     recurrence: PlannedPaymentRecurrence = PlannedPaymentRecurrence.NONE
     is_debt_payment: bool = False
     notes: str | None = Field(default=None, max_length=2_000)
+    end_date: date | None = None
+    tag_ids: list[int] = Field(default_factory=list)
 
 
 class PlannedPaymentUpdate(BaseModel):
@@ -352,6 +393,12 @@ class PlannedPaymentUpdate(BaseModel):
     is_debt_payment: bool | None = None
     notes: str | None = Field(default=None, max_length=2_000)
     status: PlannedPaymentStatus | None = None
+    end_date: date | None = None
+    tag_ids: list[int] | None = None
+
+
+class RecurrenceMaterializeRead(BaseModel):
+    created_count: int
 
 
 class PlannedPaymentMarkPaid(BaseModel):

@@ -15,6 +15,7 @@ from app.models.core import (
     Transaction,
     TransactionKind,
     TransactionSource,
+    planned_payment_tags,
     transaction_tags,
 )
 
@@ -30,6 +31,7 @@ __all__ = [
     "PlannedPayment",
     "PlannedPaymentRecurrence",
     "PlannedPaymentStatus",
+    "planned_payment_tags",
     "Tag",
     "Theme",
     "Transaction",

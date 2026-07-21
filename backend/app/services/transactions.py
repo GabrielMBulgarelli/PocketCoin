@@ -24,7 +24,7 @@ from app.services.reference_data import DomainValidationError, NotFoundError, no
 
 @dataclass(frozen=True)
 class TransactionInput:
-    financial_account_id: int
+    financial_account_id: int | None
     category_id: int
     kind: TransactionKind
     amount_minor: int
@@ -88,7 +88,8 @@ def create_transaction(session: Session, data: TransactionInput) -> Transaction:
         raise DomainValidationError("Use the transfer endpoints for transfer rows.", "kind")
     if data.amount_minor <= 0:
         raise DomainValidationError("Amount must be positive.", "amount_minor")
-    _account(session, data.financial_account_id)
+    if data.financial_account_id is not None:
+        _account(session, data.financial_account_id)
     _category(session, data.category_id, data.kind)
     transaction = Transaction(
         financial_account_id=data.financial_account_id,
@@ -151,8 +152,13 @@ def transaction_statement(
     end_date: date | None = None,
     tag_id: int | None = None,
     sort: str = "date_desc",
+    without_account: bool = False,
 ):
     statement = select(Transaction)
+    if without_account and financial_account_id is not None:
+        raise DomainValidationError("Choose either General or a financial account.", "account")
+    if without_account:
+        statement = statement.where(Transaction.financial_account_id.is_(None))
     if financial_account_id is not None:
         statement = statement.where(Transaction.financial_account_id == financial_account_id)
     if category_id is not None:
@@ -197,19 +203,25 @@ def list_transactions(
     end_date: date | None = None,
     tag_id: int | None = None,
     sort: str = "date_desc",
+    without_account: bool = False,
 ) -> list[Transaction]:
     if not 1 <= limit <= 200 or offset < 0:
         raise DomainValidationError("Invalid transaction pagination.")
-    statement = transaction_statement(
-        financial_account_id,
-        category_id,
-        kind,
-        search,
-        start_date,
-        end_date,
-        tag_id,
-        sort,
-    ).limit(limit).offset(offset)
+    statement = (
+        transaction_statement(
+            financial_account_id,
+            category_id,
+            kind,
+            search,
+            start_date,
+            end_date,
+            tag_id,
+            sort,
+            without_account,
+        )
+        .limit(limit)
+        .offset(offset)
+    )
     return list(session.scalars(statement))
 
 
@@ -232,6 +244,7 @@ def export_transactions_csv(
     end_date: date | None = None,
     tag_id: int | None = None,
     sort: str = "date_asc",
+    without_account: bool = False,
 ) -> tuple[bytes, str]:
     rows = list(
         session.scalars(
@@ -244,6 +257,7 @@ def export_transactions_csv(
                 end_date,
                 tag_id,
                 sort,
+                without_account,
             )
         )
     )
@@ -311,21 +325,24 @@ def update_transaction(session: Session, transaction_id: int, **values: object) 
     transaction = get_transaction(session, transaction_id)
     if transaction.transfer_group_id is not None:
         raise DomainValidationError("Transfer rows use dedicated transfer endpoints.")
+    account_value = values.get("financial_account_id", transaction.financial_account_id)
     data = TransactionInput(
-        financial_account_id=int(
-            values.get("financial_account_id", transaction.financial_account_id)
-        ),
+        financial_account_id=int(account_value) if account_value is not None else None,
         category_id=int(values.get("category_id", transaction.category_id)),
         kind=TransactionKind(values.get("kind", transaction.kind)),
         amount_minor=int(values.get("amount_minor", transaction.amount_minor)),
         transaction_date=values.get("transaction_date", transaction.transaction_date),
         description=str(values.get("description", transaction.description)),
         notes=values.get("notes", transaction.notes),
+        source=transaction.source,
         tag_ids=values.get("tag_ids"),
     )
-    _account(session, data.financial_account_id)
+    if data.financial_account_id is not None:
+        _account(session, data.financial_account_id)
     _category(session, data.category_id, data.kind)
     for field, value in data.__dict__.items():
+        if field == "tag_ids":
+            continue
         setattr(transaction, field, value)
     transaction.description = normalized_name(transaction.description)
     session.flush()

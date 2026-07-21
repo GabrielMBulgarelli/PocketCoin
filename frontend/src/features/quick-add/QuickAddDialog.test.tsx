@@ -8,7 +8,6 @@ import { QuickAddDialog } from "./QuickAddDialog";
 
 vi.mock("../../api/referenceData", () => ({ getCategories: vi.fn(), getFinancialAccounts: vi.fn(), getTags: vi.fn() }));
 vi.mock("../../api/transactions", () => ({ createTransaction: vi.fn(), createTransfer: vi.fn() }));
-vi.mock("../../api/plannedPayments", () => ({ createPlannedPayment: vi.fn() }));
 
 const accounts = [{ id: 1, name: "Checking", kind: "checking", opening_balance_minor: 0, opening_balance_date: "2026-01-01", credit_limit_minor: null, is_active: true }];
 const categories = [
@@ -26,7 +25,6 @@ function renderDialog() {
 
 async function fillExpense() {
   fireEvent.change(await screen.findByLabelText("Amount"), { target: { value: "12.50" } });
-  fireEvent.change(screen.getByLabelText(/^Account/), { target: { value: "1" } });
   fireEvent.change(screen.getByLabelText(/^Category/), { target: { value: "10" } });
   fireEvent.change(screen.getByLabelText("Description"), { target: { value: "Lunch" } });
 }
@@ -46,6 +44,22 @@ describe("QuickAddDialog", () => {
     expect(await screen.findByText("Tags are unavailable. You can still add this transaction without one.")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Add expense" }));
     await waitFor(() => expect(createTransaction).toHaveBeenCalledOnce());
+    expect(createTransaction).toHaveBeenCalledWith(expect.objectContaining({ financial_account_id: null }));
+  });
+
+  it("creates recurrence details from an expense without a specific account", async () => {
+    renderDialog();
+    await fillExpense();
+    fireEvent.click(screen.getByLabelText("Repeat this transaction"));
+    fireEvent.change(screen.getByLabelText("Frequency"), { target: { value: "monthly" } });
+    fireEvent.change(screen.getByLabelText("Ends"), { target: { value: "date" } });
+    fireEvent.change(screen.getByLabelText("End date"), { target: { value: "2026-12-31" } });
+    fireEvent.click(screen.getByLabelText("Recurring debt payment"));
+    fireEvent.click(screen.getByRole("button", { name: "Add expense" }));
+    await waitFor(() => expect(createTransaction).toHaveBeenCalledWith(expect.objectContaining({
+      financial_account_id: null,
+      recurrence: { frequency: "monthly", end_date: "2026-12-31", is_debt_payment: true },
+    })));
   });
 
   it("clears mode-specific references while preserving shared entry fields", async () => {

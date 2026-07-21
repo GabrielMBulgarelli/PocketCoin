@@ -2,7 +2,7 @@ import { apiGet } from "./client";
 import type { Transaction } from "./transactions";
 import type { PlannedPayment } from "./plannedPayments";
 
-export type DashboardFilters = { start_date: string; end_date: string; financial_account_id?: number; category_id?: number; tag_id?: number };
+export type DashboardFilters = { start_date: string; end_date: string; financial_account_id?: number; without_account?: boolean; category_id?: number; tag_id?: number };
 export type DashboardSummary = { balance_minor: number; income_minor: number; expense_minor: number; net_minor: number; savings_rate: number | null };
 export type CashFlowPoint = { date: string; income_minor: number; expense_minor: number };
 export type CategoryPoint = { name: string; amount_minor: number };

@@ -13,6 +13,7 @@ from sqlalchemy import (
     Integer,
     String,
     Table,
+    UniqueConstraint,
     func,
     text,
 )
@@ -62,6 +63,7 @@ class PlannedPaymentStatus(StrEnum):
     PENDING = "pending"
     PAID = "paid"
     CANCELLED = "cancelled"
+    COMPLETED = "completed"
 
 
 class PlannedPaymentRecurrence(StrEnum):
@@ -174,11 +176,14 @@ class Transaction(Base):
             "(kind IN ('TRANSFER_IN', 'TRANSFER_OUT') AND category_id IS NULL) "
             "OR (kind IN ('INCOME', 'EXPENSE') AND category_id IS NOT NULL)"
         ),
+        UniqueConstraint(
+            "planned_payment_id", "scheduled_for", name="uq_transactions_planned_occurrence"
+        ),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    financial_account_id: Mapped[int] = mapped_column(
-        ForeignKey("financial_accounts.id", ondelete="RESTRICT"), nullable=False, index=True
+    financial_account_id: Mapped[int | None] = mapped_column(
+        ForeignKey("financial_accounts.id", ondelete="RESTRICT"), nullable=True, index=True
     )
     category_id: Mapped[int | None] = mapped_column(
         ForeignKey("categories.id", ondelete="RESTRICT"), nullable=True, index=True
@@ -194,6 +199,10 @@ class Transaction(Base):
     external_id: Mapped[str | None] = mapped_column(String(250), nullable=True)
     import_fingerprint: Mapped[str | None] = mapped_column(String(128), nullable=True)
     import_batch_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    planned_payment_id: Mapped[int | None] = mapped_column(
+        ForeignKey("planned_payments.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    scheduled_for: Mapped[date | None] = mapped_column(Date, nullable=True)
     source: Mapped[TransactionSource] = mapped_column(
         Enum(TransactionSource, native_enum=False), nullable=False, default=TransactionSource.MANUAL
     )
@@ -265,13 +274,18 @@ class PlannedPayment(Base):
     amount_minor: Mapped[int] = mapped_column(Integer, nullable=False)
     due_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
     status: Mapped[PlannedPaymentStatus] = mapped_column(
-        Enum(PlannedPaymentStatus, native_enum=False), nullable=False,
-        default=PlannedPaymentStatus.PENDING, index=True
+        Enum(PlannedPaymentStatus, native_enum=False),
+        nullable=False,
+        default=PlannedPaymentStatus.PENDING,
+        index=True,
     )
     recurrence: Mapped[PlannedPaymentRecurrence] = mapped_column(
-        Enum(PlannedPaymentRecurrence, native_enum=False), nullable=False,
-        default=PlannedPaymentRecurrence.NONE
+        Enum(PlannedPaymentRecurrence, native_enum=False),
+        nullable=False,
+        default=PlannedPaymentRecurrence.NONE,
     )
+    end_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    anchor_day: Mapped[int | None] = mapped_column(Integer, nullable=True)
     is_debt_payment: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     notes: Mapped[str | None] = mapped_column(String(2_000), nullable=True)
     last_paid_due_date: Mapped[date | None] = mapped_column(Date, nullable=True)
@@ -284,3 +298,23 @@ class PlannedPayment(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now
     )
+
+    @property
+    def needs_attention(self) -> bool:
+        return (
+            self.status == PlannedPaymentStatus.PENDING
+            and self.recurrence != PlannedPaymentRecurrence.NONE
+            and self.category_id is None
+        )
+
+
+planned_payment_tags = Table(
+    "planned_payment_tags",
+    Base.metadata,
+    Column(
+        "planned_payment_id",
+        ForeignKey("planned_payments.id", ondelete="CASCADE"),
+        primary_key=True,
+    ),
+    Column("tag_id", ForeignKey("tags.id", ondelete="RESTRICT"), primary_key=True),
+)

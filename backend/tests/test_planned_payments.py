@@ -83,19 +83,20 @@ def test_non_recurring_mark_paid_creates_one_sourced_transaction(session) -> Non
     assert session.query(Transaction).count() == 1
 
 
-def test_mark_paid_without_complete_references_records_no_transaction(session) -> None:
+def test_mark_paid_requires_category_but_allows_general_account(session) -> None:
     account, expense, _ = references(session)
     account_only = create_planned_payment(session, payment_input(account.id))
     category_only = create_planned_payment(session, payment_input(category_id=expense.id))
 
-    for payment in (account_only, category_only):
-        result = mark_planned_payment_paid(session, payment.id, payment.due_date)
-        assert result.payment.status == PlannedPaymentStatus.PAID
-        assert result.payment.last_paid_due_date == date(2026, 7, 31)
-        assert result.payment.last_transaction_id is None
-        assert result.transaction is None
+    missing_category = mark_planned_payment_paid(session, account_only.id, account_only.due_date)
+    assert missing_category.transaction is None
+    assert missing_category.payment.last_transaction_id is None
 
-    assert session.query(Transaction).count() == 0
+    general = mark_planned_payment_paid(session, category_only.id, category_only.due_date)
+    assert general.transaction is not None
+    assert general.transaction.financial_account_id is None
+    assert general.payment.last_transaction_id == general.transaction.id
+    assert session.query(Transaction).count() == 1
 
 
 def test_removing_pending_account_reference_allows_deactivation(session) -> None:
@@ -111,9 +112,7 @@ def test_cancelled_payment_can_be_reactivated(session) -> None:
     payment = create_planned_payment(session, payment_input())
     update_planned_payment(session, payment.id, status=PlannedPaymentStatus.CANCELLED)
 
-    reactivated = update_planned_payment(
-        session, payment.id, status=PlannedPaymentStatus.PENDING
-    )
+    reactivated = update_planned_payment(session, payment.id, status=PlannedPaymentStatus.PENDING)
 
     assert reactivated.status == PlannedPaymentStatus.PENDING
 
