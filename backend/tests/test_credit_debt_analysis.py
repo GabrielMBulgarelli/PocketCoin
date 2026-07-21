@@ -212,6 +212,19 @@ def test_dti_uses_end_date_month_and_income_filters(session) -> None:
     create_transaction(
         session,
         TransactionInput(
+            checking.id,
+            debt.id,
+            TransactionKind.EXPENSE,
+            500,
+            date(2026, 7, 4),
+            "One-off debt",
+            tag_ids=[tag.id],
+            is_debt_payment=True,
+        ),
+    )
+    create_transaction(
+        session,
+        TransactionInput(
             checking.id, income.id, TransactionKind.INCOME, 8_000, date(2026, 6, 30), "June"
         ),
     )
@@ -219,11 +232,62 @@ def test_dti_uses_end_date_month_and_income_filters(session) -> None:
     result = debt_to_income(session, date(2026, 7, 12), checking.id, None, tag.id)
     assert july.id is not None
     assert result == {
+        "recurring_debt_minor": 0,
+        "additional_debt_minor": 500,
+        "monthly_debt_minor": 500,
+        "gross_income_minor": 4_000,
+        "ratio_percentage": 12.5,
+    }
+    assert debt_to_income(session, date(2026, 8, 12), checking.id)["ratio_percentage"] is None
+
+
+def test_dti_does_not_double_count_materialized_active_series(session) -> None:
+    checking = add_account(session, "Checking", AccountKind.CHECKING, 0)
+    income = Category(name="Salary", direction=CategoryDirection.INCOME)
+    debt = Category(name="Debt", direction=CategoryDirection.EXPENSE)
+    session.add_all([income, debt])
+    session.flush()
+    series = add_payment(
+        session,
+        "Loan",
+        1_000,
+        PlannedPaymentRecurrence.MONTHLY,
+        account_id=checking.id,
+        category_id=debt.id,
+    )
+    posted = create_transaction(
+        session,
+        TransactionInput(
+            checking.id,
+            debt.id,
+            TransactionKind.EXPENSE,
+            1_000,
+            date(2026, 7, 3),
+            "Loan",
+            is_debt_payment=True,
+        ),
+    )
+    posted.planned_payment_id = series.id
+    posted.scheduled_for = date(2026, 7, 3)
+    create_transaction(
+        session,
+        TransactionInput(
+            checking.id,
+            income.id,
+            TransactionKind.INCOME,
+            4_000,
+            date(2026, 7, 2),
+            "Salary",
+        ),
+    )
+
+    assert debt_to_income(session, date(2026, 7, 12), checking.id) == {
+        "recurring_debt_minor": 1_000,
+        "additional_debt_minor": 0,
         "monthly_debt_minor": 1_000,
         "gross_income_minor": 4_000,
         "ratio_percentage": 25.0,
     }
-    assert debt_to_income(session, date(2026, 8, 12), checking.id)["ratio_percentage"] is None
 
 
 def test_no_liability_is_not_applicable(session) -> None:

@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { getTransactionTimeline } from "../../api/transactions";
+import { getTransactionTimeline, updateTransaction } from "../../api/transactions";
 import { updatePlannedPayment } from "../../api/plannedPayments";
 import { formatShortDate } from "../../lib/format";
 import { TransactionsView } from "./TransactionsView";
@@ -14,7 +14,7 @@ vi.mock("../../api/referenceData", () => ({
 }));
 vi.mock("../../api/transactions", async (original) => {
   const actual = await original<typeof import("../../api/transactions")>();
-  return { ...actual, getTransactionTimeline: vi.fn() };
+  return { ...actual, getTransactionTimeline: vi.fn(), updateTransaction: vi.fn().mockResolvedValue({}) };
 });
 vi.mock("../../api/plannedPayments", async (original) => {
   const actual = await original<typeof import("../../api/plannedPayments")>();
@@ -28,7 +28,26 @@ function renderTransactions() {
 
 describe("TransactionsView filters and formatting", () => {
   beforeEach(() => {
+    vi.clearAllMocks();
     vi.mocked(getTransactionTimeline).mockResolvedValue([{ row_type: "transaction", id: 9, transaction_date: "2026-07-13", kind: "expense", amount_minor: 123456, description: "Almuerzo", notes: null, category_id: 2, financial_account_id: 1, transfer_group_id: null, planned_payment_id: null, scheduled_for: null, recurrence: null, end_date: null, remaining_occurrences: null, is_debt_payment: false, needs_attention: false }]);
+  });
+
+  it("labels and edits a posted debt expense", async () => {
+    vi.mocked(getTransactionTimeline).mockResolvedValueOnce([{ row_type: "transaction", id: 9, transaction_date: "2026-07-13", kind: "expense", amount_minor: 123456, description: "Loan payment", notes: null, category_id: 2, financial_account_id: 1, transfer_group_id: null, planned_payment_id: null, scheduled_for: null, recurrence: null, end_date: null, remaining_occurrences: null, is_debt_payment: true, needs_attention: false }]);
+    renderTransactions();
+
+    expect(await screen.findByText("Debt")).toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText("Edit Loan payment"));
+    expect(screen.getByLabelText("Debt payment")).toBeChecked();
+    fireEvent.click(screen.getByRole("button", { name: "Save transaction" }));
+
+    await waitFor(() =>
+      expect(updateTransaction).toHaveBeenCalledWith(
+        9,
+        expect.objectContaining({ is_debt_payment: true }),
+        "this_occurrence",
+      ),
+    );
   });
 
   it("uses saved locale and currency in the ledger", async () => {

@@ -88,6 +88,8 @@ function stubApi() {
                   ? { items: [], monthly_total_minor: 0 }
                   : url.includes("/api/dashboard/debt-to-income")
                     ? {
+                        recurring_debt_minor: 0,
+                        additional_debt_minor: 0,
                         monthly_debt_minor: 0,
                         gross_income_minor: 0,
                         ratio_percentage: null,

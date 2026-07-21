@@ -173,6 +173,10 @@ class Transaction(Base):
     __table_args__ = (
         CheckConstraint("amount_minor > 0"),
         CheckConstraint(
+            "is_debt_payment = 0 OR kind = 'EXPENSE'",
+            name="ck_transactions_debt_expense_only",
+        ),
+        CheckConstraint(
             "(kind IN ('TRANSFER_IN', 'TRANSFER_OUT') AND category_id IS NULL) "
             "OR (kind IN ('INCOME', 'EXPENSE') AND category_id IS NOT NULL)"
         ),
@@ -203,6 +207,9 @@ class Transaction(Base):
         ForeignKey("planned_payments.id", ondelete="SET NULL"), nullable=True, index=True
     )
     scheduled_for: Mapped[date | None] = mapped_column(Date, nullable=True)
+    is_debt_payment: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
     source: Mapped[TransactionSource] = mapped_column(
         Enum(TransactionSource, native_enum=False), nullable=False, default=TransactionSource.MANUAL
     )

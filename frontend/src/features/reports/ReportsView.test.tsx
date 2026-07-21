@@ -62,6 +62,8 @@ describe("ReportsView", () => {
       }
       if (path === "debt-to-income") {
         return Promise.resolve({
+          recurring_debt_minor: 0,
+          additional_debt_minor: 0,
           monthly_debt_minor: 0,
           gross_income_minor: 0,
           ratio_percentage: null,
@@ -96,10 +98,11 @@ describe("ReportsView", () => {
       }
       if (path === "debt-to-income") {
         return Promise.resolve({
-          month: "2026-07",
           recurring_debt_minor: 0,
+          additional_debt_minor: 0,
+          monthly_debt_minor: 0,
           gross_income_minor: 0,
-          ratio_percent: null,
+          ratio_percentage: null,
         });
       }
       return Promise.resolve([]);

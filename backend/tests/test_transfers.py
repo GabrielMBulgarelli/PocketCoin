@@ -1,6 +1,7 @@
 from datetime import date
 
 from app.models import AccountKind, Category, CategoryDirection, FinancialAccount, TransactionKind
+from app.services.reference_data import DomainValidationError
 from app.services.transactions import (
     TransactionInput,
     TransferInput,
@@ -74,6 +75,44 @@ def test_liability_expense_increases_debt_and_transfer_in_decreases_it(session) 
 
     assert account_balance_minor(session, liability.id) == 700
     assert account_balance_minor(session, asset.id) == -500
+
+
+def test_transfer_allows_general_on_exactly_one_side(session) -> None:
+    account = FinancialAccount(
+        name="Checking",
+        kind=AccountKind.CHECKING,
+        opening_balance_minor=1_000,
+        opening_balance_date=date(2026, 1, 1),
+    )
+    session.add(account)
+    session.flush()
+
+    general_out, account_in = create_transfer(
+        session,
+        TransferInput(None, account.id, 300, date(2026, 7, 2), "Deposit"),
+    )
+    account_out, general_in = create_transfer(
+        session,
+        TransferInput(account.id, None, 200, date(2026, 7, 3), "Withdrawal"),
+    )
+
+    assert general_out.financial_account_id is None
+    assert account_in.financial_account_id == account.id
+    assert account_out.financial_account_id == account.id
+    assert general_in.financial_account_id is None
+    assert account_balance_minor(session, account.id) == 1_100
+
+
+def test_transfer_rejects_general_to_general(session) -> None:
+    try:
+        create_transfer(
+            session,
+            TransferInput(None, None, 100, date(2026, 7, 2), "Invalid"),
+        )
+    except DomainValidationError as error:
+        assert "differ" in str(error).lower()
+    else:
+        raise AssertionError("General to General must be rejected")
 
 
 def test_transaction_list_filters_by_kind_with_deterministic_newest_first_order(session) -> None:

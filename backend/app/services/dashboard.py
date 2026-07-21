@@ -15,6 +15,7 @@ from app.models import (
     Transaction,
     TransactionKind,
     TransactionSource,
+    planned_payment_tags,
     transaction_tags,
 )
 from app.services.planned_payments import advance_recurrence_date
@@ -165,6 +166,7 @@ def recurring_debts(
     financial_account_id: int | None = None,
     category_id: int | None = None,
     without_account: bool = False,
+    tag_id: int | None = None,
 ) -> dict[str, object]:
     statement = select(PlannedPayment).where(
         PlannedPayment.status == PlannedPaymentStatus.PENDING,
@@ -183,6 +185,10 @@ def recurring_debts(
         statement = statement.where(PlannedPayment.financial_account_id.is_(None))
     if category_id is not None:
         statement = statement.where(PlannedPayment.category_id == category_id)
+    if tag_id is not None:
+        statement = statement.join(planned_payment_tags).where(
+            planned_payment_tags.c.tag_id == tag_id
+        )
     items: list[dict[str, object]] = []
     exact_total = Decimal(0)
     for payment in session.scalars(statement.order_by(PlannedPayment.id)):
@@ -216,27 +222,68 @@ def debt_to_income(
     tag_id: int | None = None,
     without_account: bool = False,
 ) -> dict[str, int | float | None]:
-    monthly_debt = int(
-        recurring_debts(session, financial_account_id, category_id, without_account)[
+    recurring_debt = int(
+        recurring_debts(
+            session,
+            financial_account_id,
+            category_id,
+            without_account,
+            tag_id,
+        )[
             "monthly_total_minor"
         ]
     )
     month_start = end_date.replace(day=1)
     month_end = end_date.replace(day=monthrange(end_date.year, end_date.month)[1])
+    transactions = _transactions(
+        session,
+        month_start,
+        month_end,
+        financial_account_id,
+        category_id,
+        tag_id,
+        without_account,
+    )
     gross_income = sum(
         transaction.amount_minor
-        for transaction in _transactions(
-            session,
-            month_start,
-            month_end,
-            financial_account_id,
-            category_id,
-            tag_id,
-            without_account,
-        )
+        for transaction in transactions
         if transaction.kind == TransactionKind.INCOME
     )
+    active_series = select(PlannedPayment.id).where(
+        PlannedPayment.status == PlannedPaymentStatus.PENDING,
+        PlannedPayment.is_debt_payment.is_(True),
+        PlannedPayment.recurrence.in_(
+            [
+                PlannedPaymentRecurrence.WEEKLY,
+                PlannedPaymentRecurrence.MONTHLY,
+                PlannedPaymentRecurrence.YEARLY,
+            ]
+        ),
+    )
+    if financial_account_id is not None:
+        active_series = active_series.where(
+            PlannedPayment.financial_account_id == financial_account_id
+        )
+    elif without_account:
+        active_series = active_series.where(PlannedPayment.financial_account_id.is_(None))
+    if category_id is not None:
+        active_series = active_series.where(PlannedPayment.category_id == category_id)
+    if tag_id is not None:
+        active_series = active_series.join(planned_payment_tags).where(
+            planned_payment_tags.c.tag_id == tag_id
+        )
+    active_series_ids = set(session.scalars(active_series))
+    additional_debt = sum(
+        transaction.amount_minor
+        for transaction in transactions
+        if transaction.kind == TransactionKind.EXPENSE
+        and transaction.is_debt_payment
+        and transaction.planned_payment_id not in active_series_ids
+    )
+    monthly_debt = recurring_debt + additional_debt
     return {
+        "recurring_debt_minor": recurring_debt,
+        "additional_debt_minor": additional_debt,
         "monthly_debt_minor": monthly_debt,
         "gross_income_minor": gross_income,
         "ratio_percentage": round(monthly_debt / gross_income * 100, 1) if gross_income else None,

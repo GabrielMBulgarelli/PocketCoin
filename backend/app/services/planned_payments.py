@@ -74,6 +74,8 @@ def _validate(session: Session, data: PlannedPaymentInput) -> str:
     title = normalized_name(data.title)
     if data.amount_minor <= 0:
         raise DomainValidationError("Amount must be positive.", "amount_minor")
+    if data.is_debt_payment and data.direction != CategoryDirection.EXPENSE:
+        raise DomainValidationError("Debt payment is only valid for expenses.", "is_debt_payment")
     if data.financial_account_id is not None:
         account = session.get(FinancialAccount, data.financial_account_id)
         if account is None or not account.is_active:
@@ -227,6 +229,7 @@ def _materialize_occurrence(session: Session, payment: PlannedPayment) -> Transa
             notes=payment.notes,
             tag_ids=_series_tag_ids(session, payment.id),
             source=TransactionSource.PLANNED_PAYMENT,
+            is_debt_payment=payment.is_debt_payment,
         ),
     )
     transaction.planned_payment_id = payment.id
@@ -453,7 +456,7 @@ def list_transaction_timeline(
             "recurrence": None,
             "end_date": None,
             "remaining_occurrences": None,
-            "is_debt_payment": False,
+            "is_debt_payment": row.is_debt_payment,
             "needs_attention": False,
         }
         for row in posted
@@ -504,6 +507,7 @@ def update_recurring_transaction(
         payment.amount_minor = transaction.amount_minor
         payment.title = transaction.description
         payment.notes = transaction.notes
+        payment.is_debt_payment = transaction.is_debt_payment
         if "transaction_date" in values:
             payment.anchor_day = transaction.transaction_date.day
             payment.due_date = advance_recurrence_date(

@@ -149,6 +149,7 @@ class TransactionRead(Schema):
     source: TransactionSource
     planned_payment_id: int | None
     scheduled_for: date | None
+    is_debt_payment: bool
     created_at: datetime
     updated_at: datetime
 
@@ -156,7 +157,7 @@ class TransactionRead(Schema):
 class RecurrenceCreate(BaseModel):
     frequency: PlannedPaymentRecurrence
     end_date: date | None = None
-    is_debt_payment: bool = False
+    is_debt_payment: bool | None = None
 
     @field_validator("frequency")
     @classmethod
@@ -175,7 +176,26 @@ class TransactionCreate(BaseModel):
     description: str = Field(min_length=1, max_length=250)
     notes: str | None = Field(default=None, max_length=2_000)
     tag_ids: list[int] = Field(default_factory=list)
+    is_debt_payment: bool | None = None
     recurrence: RecurrenceCreate | None = None
+
+    @model_validator(mode="after")
+    def debt_is_expense_and_inputs_agree(self) -> "TransactionCreate":
+        legacy = self.recurrence.is_debt_payment if self.recurrence else None
+        if self.is_debt_payment is not None and legacy is not None:
+            if self.is_debt_payment != legacy:
+                raise ValueError("Conflicting debt payment values")
+        if self.resolved_is_debt_payment and self.kind != TransactionKind.EXPENSE:
+            raise ValueError("Debt payment is only valid for expenses")
+        return self
+
+    @property
+    def resolved_is_debt_payment(self) -> bool:
+        if self.is_debt_payment is not None:
+            return self.is_debt_payment
+        if self.recurrence and self.recurrence.is_debt_payment is not None:
+            return self.recurrence.is_debt_payment
+        return False
 
 
 class TransactionUpdate(BaseModel):
@@ -187,6 +207,13 @@ class TransactionUpdate(BaseModel):
     description: str | None = Field(default=None, min_length=1, max_length=250)
     notes: str | None = Field(default=None, max_length=2_000)
     tag_ids: list[int] | None = None
+    is_debt_payment: bool | None = None
+
+    @model_validator(mode="after")
+    def debt_is_not_income(self) -> "TransactionUpdate":
+        if self.is_debt_payment and self.kind == TransactionKind.INCOME:
+            raise ValueError("Debt payment is only valid for expenses")
+        return self
 
 
 class TransactionTimelineRead(BaseModel):
@@ -267,6 +294,8 @@ class RecurringDebtsRead(BaseModel):
 
 
 class DebtToIncomeRead(BaseModel):
+    recurring_debt_minor: int
+    additional_debt_minor: int
     monthly_debt_minor: int
     gross_income_minor: int
     ratio_percentage: float | None
@@ -340,12 +369,18 @@ class BudgetProgressRead(BaseModel):
 
 
 class TransferCreate(BaseModel):
-    from_account_id: int
-    to_account_id: int
+    from_account_id: int | None
+    to_account_id: int | None
     amount_minor: int = Field(gt=0)
     transaction_date: date
     description: str = Field(min_length=1, max_length=250)
     notes: str | None = Field(default=None, max_length=2_000)
+
+    @model_validator(mode="after")
+    def transfer_accounts_differ(self) -> "TransferCreate":
+        if self.from_account_id == self.to_account_id:
+            raise ValueError("Transfer accounts must differ")
+        return self
 
 
 class PlannedPaymentRead(Schema):

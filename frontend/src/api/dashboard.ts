@@ -22,7 +22,7 @@ export type CreditUtilization = { has_liability_accounts: boolean; has_credit_ac
 export type CreditAccountUtilization = { account_id: number; account_name: string; credit_limit_minor: number | null; current_debt_minor: number; current_percentage: number | null; average_percentage: number | null; maximum_percentage: number | null };
 export type RecurringDebtItem = { payment_id: number; title: string; recurrence: string; amount_minor: number; monthly_amount_minor: number };
 export type RecurringDebts = { items: RecurringDebtItem[]; monthly_total_minor: number };
-export type DebtToIncome = { monthly_debt_minor: number; gross_income_minor: number; ratio_percentage: number | null };
+export type DebtToIncome = { recurring_debt_minor: number; additional_debt_minor: number; monthly_debt_minor: number; gross_income_minor: number; ratio_percentage: number | null };
 export type DashboardData = { summary: DashboardSummary; forecast: BalanceForecast; creditUtilization: CreditUtilization; creditAccounts: CreditAccountUtilization[]; recurringDebts: RecurringDebts; debtToIncome: DebtToIncome; cashFlow: CashFlowPoint[]; comparison: ComparisonPoint[]; categories: CategoryPoint[]; structure: CategoryPoint[]; recent: Transaction[]; upcoming: PlannedPayment[] };
 
 export async function getDashboardEndpoint<T>(path: string, filters: DashboardFilters, extra: Record<string, string> = {}, signal?: AbortSignal): Promise<T> {

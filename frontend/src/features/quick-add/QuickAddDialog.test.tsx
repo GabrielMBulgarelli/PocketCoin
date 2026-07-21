@@ -3,7 +3,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { getCategories, getFinancialAccounts, getTags } from "../../api/referenceData";
-import { createTransaction } from "../../api/transactions";
+import { createTransaction, createTransfer } from "../../api/transactions";
 import { QuickAddDialog } from "./QuickAddDialog";
 
 vi.mock("../../api/referenceData", () => ({ getCategories: vi.fn(), getFinancialAccounts: vi.fn(), getTags: vi.fn() }));
@@ -35,6 +35,7 @@ describe("QuickAddDialog", () => {
     vi.mocked(getCategories).mockResolvedValue(categories);
     vi.mocked(getTags).mockResolvedValue(tags);
     vi.mocked(createTransaction).mockResolvedValue({} as Awaited<ReturnType<typeof createTransaction>>);
+    vi.mocked(createTransfer).mockResolvedValue({} as Awaited<ReturnType<typeof createTransfer>>);
   });
 
   it("does not let a tag lookup failure block an expense", async () => {
@@ -54,11 +55,39 @@ describe("QuickAddDialog", () => {
     fireEvent.change(screen.getByLabelText("Frequency"), { target: { value: "monthly" } });
     fireEvent.change(screen.getByLabelText("Ends"), { target: { value: "date" } });
     fireEvent.change(screen.getByLabelText("End date"), { target: { value: "2026-12-31" } });
-    fireEvent.click(screen.getByLabelText("Recurring debt payment"));
+    fireEvent.click(screen.getByLabelText("Debt payment"));
     fireEvent.click(screen.getByRole("button", { name: "Add expense" }));
     await waitFor(() => expect(createTransaction).toHaveBeenCalledWith(expect.objectContaining({
       financial_account_id: null,
-      recurrence: { frequency: "monthly", end_date: "2026-12-31", is_debt_payment: true },
+      is_debt_payment: true,
+      recurrence: { frequency: "monthly", end_date: "2026-12-31" },
+    })));
+  });
+
+  it("classifies a one-off expense as debt without requiring recurrence", async () => {
+    renderDialog();
+    await fillExpense();
+    fireEvent.click(screen.getByLabelText("Debt payment"));
+    fireEvent.click(screen.getByRole("button", { name: "Add expense" }));
+
+    await waitFor(() => expect(createTransaction).toHaveBeenCalledWith(expect.objectContaining({
+      is_debt_payment: true,
+      recurrence: undefined,
+    })));
+  });
+
+  it("allows General as exactly one transfer endpoint", async () => {
+    renderDialog();
+    fireEvent.click(screen.getByRole("button", { name: /transfer/i }));
+    fireEvent.change(await screen.findByLabelText("Amount"), { target: { value: "25" } });
+    fireEvent.change(screen.getByLabelText("Description"), { target: { value: "Cash deposit" } });
+    fireEvent.change(screen.getByLabelText("From account"), { target: { value: "general" } });
+    fireEvent.change(screen.getByLabelText("To account"), { target: { value: "1" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add transfer" }));
+
+    await waitFor(() => expect(createTransfer).toHaveBeenCalledWith(expect.objectContaining({
+      from_account_id: null,
+      to_account_id: 1,
     })));
   });
 

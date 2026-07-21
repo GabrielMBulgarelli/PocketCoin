@@ -99,6 +99,7 @@ def test_recurrence_materializes_due_occurrences_once_and_copies_tags(session) -
         date(2026, 2, 28),
         date(2026, 3, 31),
     ]
+    assert all(row.is_debt_payment for row in rows)
     assert result.series.status == PlannedPaymentStatus.COMPLETED
 
 
@@ -168,6 +169,72 @@ def test_timeline_combines_posted_rows_with_only_the_next_occurrence(session) ->
     assert rows[0]["transaction_date"] == date(2026, 8, 20)
     assert rows[0]["remaining_occurrences"] == 2
     assert rows[0]["planned_payment_id"] == result.series.id
+
+
+def test_debt_classification_is_independent_and_updates_by_scope(session) -> None:
+    expense, _ = references(session)
+    standalone = create_transaction(
+        session,
+        TransactionInput(
+            None,
+            expense.id,
+            TransactionKind.EXPENSE,
+            1_000,
+            date(2026, 7, 20),
+            "One-off debt",
+            is_debt_payment=True,
+        ),
+    )
+    assert standalone.is_debt_payment is True
+
+    result = create_recurring_transaction(
+        session,
+        RecurringTransactionInput(
+            financial_account_id=None,
+            category_id=expense.id,
+            kind=TransactionKind.EXPENSE,
+            amount_minor=5_000,
+            transaction_date=date(2026, 7, 20),
+            description="Loan",
+            frequency=PlannedPaymentRecurrence.MONTHLY,
+        ),
+        through_date=date(2026, 7, 20),
+    )
+    posted = result.transactions[0]
+    update_recurring_transaction(
+        session, posted.id, scope="this_occurrence", is_debt_payment=True
+    )
+    assert posted.is_debt_payment is True
+    assert result.series.is_debt_payment is False
+
+    update_recurring_transaction(
+        session, posted.id, scope="this_and_future", is_debt_payment=True
+    )
+    assert result.series.is_debt_payment is True
+
+
+def test_income_cannot_be_classified_as_debt(session) -> None:
+    income = Category(name="Salary", direction=CategoryDirection.INCOME)
+    session.add(income)
+    session.flush()
+
+    try:
+        create_transaction(
+            session,
+            TransactionInput(
+                None,
+                income.id,
+                TransactionKind.INCOME,
+                1_000,
+                date(2026, 7, 20),
+                "Salary",
+                is_debt_payment=True,
+            ),
+        )
+    except DomainValidationError as error:
+        assert "expense" in str(error).lower()
+    else:
+        raise AssertionError("Income debt classification must be rejected")
 
 
 def test_this_and_future_updates_or_cancels_the_linked_series(session) -> None:

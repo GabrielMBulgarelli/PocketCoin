@@ -398,8 +398,10 @@ def get_recurring_debts(
     tag_id: int | None = None,
     without_account: bool = False,
 ) -> RecurringDebtsRead:
-    del start_date, end_date, tag_id
-    return recurring_debts(session, financial_account_id, category_id, without_account)
+    del start_date, end_date
+    return recurring_debts(
+        session, financial_account_id, category_id, without_account, tag_id
+    )
 
 
 @router.get("/dashboard/debt-to-income", response_model=DebtToIncomeRead)
@@ -635,16 +637,21 @@ def export_transactions(
 
 @router.post("/transactions", response_model=TransactionRead, status_code=201)
 def post_transaction(payload: TransactionCreate, session: SessionDependency) -> TransactionRead:
-    values = payload.model_dump(exclude={"recurrence"})
+    values = payload.model_dump(exclude={"recurrence", "is_debt_payment"})
     if payload.recurrence is None:
-        return create_transaction(session, TransactionInput(**values))
+        return create_transaction(
+            session,
+            TransactionInput(
+                **values, is_debt_payment=payload.resolved_is_debt_payment
+            ),
+        )
     result = create_recurring_transaction(
         session,
         RecurringTransactionInput(
             **values,
             frequency=payload.recurrence.frequency,
             end_date=payload.recurrence.end_date,
-            is_debt_payment=payload.recurrence.is_debt_payment,
+            is_debt_payment=payload.resolved_is_debt_payment,
         ),
     )
     return result.transactions[0]

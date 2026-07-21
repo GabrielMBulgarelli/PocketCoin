@@ -33,6 +33,7 @@ class TransactionInput:
     notes: str | None = None
     tag_ids: list[int] | None = None
     source: TransactionSource = TransactionSource.MANUAL
+    is_debt_payment: bool = False
 
 
 def _set_tags(session: Session, transaction: Transaction, tag_ids: list[int] | None) -> None:
@@ -58,8 +59,8 @@ def _set_tags(session: Session, transaction: Transaction, tag_ids: list[int] | N
 
 @dataclass(frozen=True)
 class TransferInput:
-    from_account_id: int
-    to_account_id: int
+    from_account_id: int | None
+    to_account_id: int | None
     amount_minor: int
     transaction_date: date
     description: str
@@ -88,6 +89,8 @@ def create_transaction(session: Session, data: TransactionInput) -> Transaction:
         raise DomainValidationError("Use the transfer endpoints for transfer rows.", "kind")
     if data.amount_minor <= 0:
         raise DomainValidationError("Amount must be positive.", "amount_minor")
+    if data.is_debt_payment and data.kind != TransactionKind.EXPENSE:
+        raise DomainValidationError("Debt payment is only valid for expenses.", "is_debt_payment")
     if data.financial_account_id is not None:
         _account(session, data.financial_account_id)
     _category(session, data.category_id, data.kind)
@@ -100,6 +103,7 @@ def create_transaction(session: Session, data: TransactionInput) -> Transaction:
         description=normalized_name(data.description),
         notes=data.notes,
         source=data.source,
+        is_debt_payment=data.is_debt_payment,
     )
     session.add(transaction)
     session.flush()
@@ -112,8 +116,10 @@ def create_transfer(session: Session, data: TransferInput) -> tuple[Transaction,
         raise DomainValidationError("Amount must be positive.", "amount_minor")
     if data.from_account_id == data.to_account_id:
         raise DomainValidationError("Transfer accounts must differ.", "to_account_id")
-    _account(session, data.from_account_id)
-    _account(session, data.to_account_id)
+    if data.from_account_id is not None:
+        _account(session, data.from_account_id)
+    if data.to_account_id is not None:
+        _account(session, data.to_account_id)
     group_id = str(uuid4())
     description = normalized_name(data.description)
     outgoing = Transaction(
@@ -336,6 +342,7 @@ def update_transaction(session: Session, transaction_id: int, **values: object) 
         notes=values.get("notes", transaction.notes),
         source=transaction.source,
         tag_ids=values.get("tag_ids"),
+        is_debt_payment=bool(values.get("is_debt_payment", transaction.is_debt_payment)),
     )
     if data.financial_account_id is not None:
         _account(session, data.financial_account_id)
