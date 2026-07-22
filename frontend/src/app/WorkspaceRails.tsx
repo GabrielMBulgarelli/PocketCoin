@@ -59,12 +59,12 @@ export function LeftWorkspaceRail({ onAction }: { onAction?: () => void }) {
   const linkClass = (selected: boolean) => `block min-h-10 rounded-lg px-3 py-2 text-sm ${selected ? "bg-accent font-medium" : "hover:bg-accent/60"}`;
   return <div className="space-y-4">
     <RailCard title="Accounts">
-      <nav aria-label="Account scope" className="space-y-1">
+      {accounts.isPending ? <p className="text-sm text-muted-foreground" role="status">Loading accounts…</p> : accounts.isError ? <button className="text-sm text-destructive" onClick={() => void accounts.refetch()} type="button">Accounts unavailable — Retry</button> : <nav aria-label="Account scope" className="space-y-1">
         <a className={linkClass(state.account.kind === "all")} href={accountHref({ kind: "all" })} onClick={onAction}>All accounts</a>
         <a className={linkClass(state.account.kind === "general")} href={accountHref({ kind: "general" })} onClick={onAction}>General</a>
         {visibleAccounts.map((account) => <a className={linkClass(state.account.kind === "account" && state.account.accountId === account.id)} href={accountHref({ kind: "account", accountId: account.id })} key={account.id} onClick={onAction}>{account.name}{account.is_active ? "" : " — inactive"}</a>)}
         {state.scope.reason === "account-unavailable" && <p className="rounded-lg border border-dashed px-3 py-2 text-xs text-muted-foreground">Account unavailable. All accounts is used for results.</p>}
-      </nav>
+      </nav>}
       <a className="mt-3 block text-sm font-medium text-primary" href={routeHref("/financial-accounts", state)} onClick={onAction}>Manage accounts</a>
     </RailCard>
     <RailCard title="Management">
@@ -76,7 +76,7 @@ export function LeftWorkspaceRail({ onAction }: { onAction?: () => void }) {
       <div className="grid gap-1 text-sm">
         <a className="rounded-lg px-3 py-2 hover:bg-accent/60" href={routeHref("/import", state)} onClick={onAction}>Import CSV</a>
         <a className="rounded-lg px-3 py-2 hover:bg-accent/60" href={routeHref("/reports", state)} onClick={onAction}>Run report</a>
-        <button className="rounded-lg px-3 py-2 text-left hover:bg-accent/60 disabled:opacity-50" disabled={backup.isPending} onClick={() => backup.mutate()} type="button">{backup.isPending ? "Backing up…" : "Backup data"}</button>
+        <button className="rounded-lg px-3 py-2 text-left hover:bg-accent/60 disabled:opacity-50" disabled={backup.isPending} onClick={() => backup.mutate(undefined, { onSuccess: onAction })} type="button">{backup.isPending ? "Backing up…" : "Backup data"}</button>
         <a className="rounded-lg px-3 py-2 hover:bg-accent/60" href="#/settings?section=data-safety" onClick={onAction}>Data Safety</a>
         {backup.isError && <p className="px-3 text-xs text-destructive" role="alert">Backup could not be created.</p>}
         {backup.isSuccess && <p className="px-3 text-xs text-muted-foreground" role="status">Backup created.</p>}
@@ -87,9 +87,10 @@ export function LeftWorkspaceRail({ onAction }: { onAction?: () => void }) {
 
 export function RightWorkspaceRail({ currency, locale, onAction }: { currency: string; locale: string; onAction?: () => void }) {
   const { accounts, state } = useWorkspaceRoute();
-  const categories = useQuery({ queryKey: queryKeys.categories, queryFn: ({ signal }) => getCategories(signal), enabled: !routeMetadata[state.path].primary });
-  const tags = useQuery({ queryKey: queryKeys.tags, queryFn: ({ signal }) => getTags(signal), enabled: state.path === "/categories" });
-  const primary = routeMetadata[state.path].primary;
+  const metadata = routeMetadata[state.path];
+  const categories = useQuery({ queryKey: queryKeys.categories, queryFn: ({ signal }) => getCategories(signal), enabled: metadata.rightRail === "references" });
+  const tags = useQuery({ queryKey: queryKeys.tags, queryFn: ({ signal }) => getTags(signal), enabled: metadata.rightRail === "references" });
+  const primary = metadata.rightRail === "financial";
   const today = localDateValue();
   const filters = { start_date: monthStartValue(today), end_date: today, ...scopeToApiParams(state.scope.effective) };
   const summary = useQuery({ queryKey: [...queryKeys.dashboard, "rail-summary", filters], queryFn: ({ signal }) => getDashboardEndpoint<DashboardSummary>("summary", filters, {}, signal), enabled: primary });
@@ -107,8 +108,16 @@ export function RightWorkspaceRail({ currency, locale, onAction }: { currency: s
     const activeTags = tags.data?.filter((item) => item.is_active).length ?? 0;
     const inactiveTags = tags.data?.filter((item) => !item.is_active).length ?? 0;
     return <div className="space-y-4"><RailCard title="Route status">
-      {state.path === "/financial-accounts" ? <p className="text-sm">{activeAccounts} active · {inactiveAccounts} inactive accounts</p> : state.path === "/categories" ? <div className="space-y-2 text-sm"><p>Categories: {activeCategories} active · {inactiveCategories} inactive</p><p>Tags: {activeTags} active · {inactiveTags} inactive</p></div> : state.path === "/import" ? <p className="text-sm text-muted-foreground">Import is local and reviewable before committing changes.</p> : <p className="text-sm text-muted-foreground">Preferences, export, backups, and restore controls.</p>}
-    </RailCard><RailCard title="Helpful actions"><div className="grid gap-2 text-sm"><a href="#/settings?section=data-safety" onClick={onAction}>Open Data Safety</a><a href={routeHref("/import", state)} onClick={onAction}>Import data</a></div></RailCard></div>;
+      {metadata.rightRail === "accounts" ? accounts.isPending ? <p className="text-sm text-muted-foreground" role="status">Loading account status…</p> : accounts.isError ? <button className="text-sm text-destructive" onClick={() => void accounts.refetch()} type="button">Account status unavailable — Retry</button> : <p className="text-sm">{activeAccounts} active · {inactiveAccounts} inactive accounts</p>
+        : metadata.rightRail === "references" ? categories.isPending || tags.isPending ? <p className="text-sm text-muted-foreground" role="status">Loading category and tag status…</p> : <div className="space-y-2 text-sm">{categories.isError ? <button className="text-destructive" onClick={() => void categories.refetch()} type="button">Categories unavailable — Retry</button> : <p>Categories: {activeCategories} active · {inactiveCategories} inactive</p>}{tags.isError ? <button className="block text-destructive" onClick={() => void tags.refetch()} type="button">Tags unavailable — Retry</button> : <p>Tags: {activeTags} active · {inactiveTags} inactive</p>}</div>
+          : metadata.rightRail === "import" ? <p className="text-sm text-muted-foreground">Import is local and reviewable before committing changes.</p>
+            : <p className="text-sm text-muted-foreground">Preferences, export, backups, and restore controls.</p>}
+    </RailCard><RailCard title="Helpful actions"><div className="grid gap-2 text-sm">
+      {metadata.rightRail === "accounts" && <><a href={routeHref("/import", state)} onClick={onAction}>Import account data</a><a href="#/settings?section=data-safety" onClick={onAction}>Open Data Safety</a></>}
+      {metadata.rightRail === "references" && <><a href={routeHref("/categories", { ...state, referenceAction: "category" })} onClick={onAction}>Add category</a><a href={routeHref("/categories", { ...state, referenceAction: "tag" })} onClick={onAction}>Add tag</a></>}
+      {metadata.rightRail === "import" && <><a href={routeHref("/financial-accounts", state)} onClick={onAction}>Manage accounts</a><a href="#/settings?section=data-safety" onClick={onAction}>Open Data Safety</a></>}
+      {metadata.rightRail === "settings" && <><a href={routeHref("/import", state)} onClick={onAction}>Import data</a><a href={routeHref("/reports", state)} onClick={onAction}>Run report</a></>}
+    </div></RailCard></div>;
   }
 
   const budgetWarnings = budgets.data?.filter((item) => item.remaining_minor < 0) ?? [];
@@ -119,8 +128,9 @@ export function RightWorkspaceRail({ currency, locale, onAction }: { currency: s
       {summary.isPending ? <p className="text-sm text-muted-foreground" role="status">Loading summary…</p> : summary.isError ? <button className="text-sm text-destructive" onClick={() => void summary.refetch()} type="button">Summary unavailable — Retry</button> : <dl className="grid gap-2 text-sm">{[["Balance", summary.data.balance_minor], ["Income", summary.data.income_minor], ["Expenses", summary.data.expense_minor], ["Net", summary.data.net_minor]].map(([label, value]) => <div className="flex justify-between gap-3" key={String(label)}><dt>{label}</dt><dd className="font-medium tabular-nums">{money(Number(value))}</dd></div>)}</dl>}
     </RailCard>
     <RailCard title="Needs attention">
-      {budgets.isError && <p className="text-xs text-destructive">Budget warnings unavailable.</p>}
-      {credit.isError && <p className="text-xs text-destructive">Credit warnings unavailable.</p>}
+      {(budgets.isPending || credit.isPending) && <p className="text-sm text-muted-foreground" role="status">Checking budgets and credit…</p>}
+      {budgets.isError && <button className="block text-xs text-destructive" onClick={() => void budgets.refetch()} type="button">Budget warnings unavailable — Retry</button>}
+      {credit.isError && <button className="mt-2 block text-xs text-destructive" onClick={() => void credit.refetch()} type="button">Credit warnings unavailable — Retry</button>}
       {!budgets.isPending && !credit.isPending && budgetWarnings.length === 0 && creditWarnings.length === 0 && !budgets.isError && !credit.isError ? <p className="text-sm text-muted-foreground">Nothing needs attention.</p> : <ul className="space-y-2 text-sm">{budgetWarnings.map((item) => <li key={`budget-${item.id}`}>{item.category_name} is {money(-item.remaining_minor)} over budget.</li>)}{creditWarnings.map((item) => <li key={`credit-${item.account_id}`}>{item.account_name} utilization is {item.current_percentage}%.</li>)}</ul>}
     </RailCard>
     <RailCard title="Upcoming">

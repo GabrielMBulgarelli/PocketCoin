@@ -2,10 +2,19 @@ import { describe, expect, it } from "vitest";
 
 import {
   canonicalizeWorkspaceHash,
+  routeMetadata,
   routeHref,
   scopeToApiParams,
   type WorkspaceRouteState,
 } from "./workspaceRouteState";
+
+it("owns the right-rail presentation for every route", () => {
+  expect(routeMetadata["/dashboard"].rightRail).toBe("financial");
+  expect(routeMetadata["/financial-accounts"].rightRail).toBe("accounts");
+  expect(routeMetadata["/categories"].rightRail).toBe("references");
+  expect(routeMetadata["/import"].rightRail).toBe("import");
+  expect(routeMetadata["/settings"].rightRail).toBe("settings");
+});
 
 describe("workspace route state", () => {
   it("parses canonical account scopes and removes invalid values", () => {

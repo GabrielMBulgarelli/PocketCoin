@@ -1,4 +1,5 @@
 import { Component, type ErrorInfo, type ReactNode, useEffect, useRef, useState } from "react";
+import { MenuIcon, PanelLeftIcon, PanelRightIcon, PlusIcon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -55,11 +56,13 @@ export function WorkspaceShell({ children, currency, feedback, locale, onQuickAd
   const [openSheet, setOpenSheet] = useState<"context" | "summary" | null>(null);
   const [navigationOpen, setNavigationOpen] = useState(false);
   const navigationTrigger = useRef<HTMLButtonElement>(null);
-  const priorSheet = useRef(openSheet);
+  const contextTrigger = useRef<HTMLButtonElement>(null);
+  const summaryTrigger = useRef<HTMLButtonElement>(null);
 
-  useEffect(() => {
-    if (priorSheet.current && priorSheet.current !== openSheet) priorSheet.current = openSheet;
-  }, [openSheet]);
+  const setWorkspaceSheet = (sheet: "context" | "summary", open: boolean) => {
+    setOpenSheet(open ? sheet : null);
+    if (!open) window.setTimeout(() => (sheet === "context" ? contextTrigger : summaryTrigger).current?.focus(), 0);
+  };
 
   useEffect(() => setOpenSheet(null), [state.path]);
 
@@ -75,10 +78,10 @@ export function WorkspaceShell({ children, currency, feedback, locale, onQuickAd
         <div className="mx-auto flex max-w-[112rem] items-center gap-2 px-3 py-3 sm:px-5">
           <a className="mr-auto text-lg font-semibold tracking-tight" href={href("/dashboard")}>PocketCoin</a>
           <Button className="hidden xl:inline-flex" size="sm" variant="ghost" asChild><a href={href("/settings")}>Settings</a></Button>
-          <Button aria-label="Quick add" className="rounded-full" size="sm" onClick={onQuickAdd}>+</Button>
-          <Button ref={navigationTrigger} aria-label="Open navigation menu" className="rounded-full" size="sm" variant="outline" onClick={() => setNavigationOpen(true)}>☰</Button>
-          <Button className="rounded-full xl:hidden" size="sm" variant="outline" onClick={() => setOpenSheet("context")}>Context</Button>
-          <Button className="rounded-full xl:hidden" size="sm" variant="outline" onClick={() => setOpenSheet("summary")}>Summary</Button>
+          <Button aria-label="Quick add" className="rounded-full" size="icon" onClick={onQuickAdd}><PlusIcon /></Button>
+          <Button ref={navigationTrigger} aria-label="Open navigation menu" className="rounded-full" size="icon" variant="outline" onClick={() => setNavigationOpen(true)}><MenuIcon /></Button>
+          <Button ref={contextTrigger} aria-label="Open context panel" className="rounded-full xl:hidden" size="icon" variant="outline" onClick={() => setWorkspaceSheet("context", true)}><PanelLeftIcon /></Button>
+          <Button ref={summaryTrigger} aria-label="Open summary panel" className="rounded-full xl:hidden" size="icon" variant="outline" onClick={() => setWorkspaceSheet("summary", true)}><PanelRightIcon /></Button>
         </div>
         <nav aria-label="Primary financial views" className="mx-auto flex max-w-[112rem] gap-1 overflow-x-auto px-3 pb-3 sm:px-5">
           {primaryRoutes.map((route) => (
@@ -129,16 +132,16 @@ export function WorkspaceShell({ children, currency, feedback, locale, onQuickAd
         </aside>
       </div>
 
-      <Sheet open={openSheet === "context"} onOpenChange={(open) => setOpenSheet(open ? "context" : null)}>
+      <Sheet open={openSheet === "context"} onOpenChange={(open) => setWorkspaceSheet("context", open)}>
         <SheetContent side="left" className="overflow-y-auto">
           <SheetHeader><SheetTitle>Context</SheetTitle><SheetDescription>Accounts, management, and quick tools.</SheetDescription></SheetHeader>
-          <div className="mt-5"><LeftWorkspaceRail onAction={() => setOpenSheet(null)} /></div>
+          <div className="mt-5"><LeftWorkspaceRail onAction={() => setWorkspaceSheet("context", false)} /></div>
         </SheetContent>
       </Sheet>
-      <Sheet open={openSheet === "summary"} onOpenChange={(open) => setOpenSheet(open ? "summary" : null)}>
+      <Sheet open={openSheet === "summary"} onOpenChange={(open) => setWorkspaceSheet("summary", open)}>
         <SheetContent side="right" className="overflow-y-auto">
           <SheetHeader><SheetTitle>Summary</SheetTitle><SheetDescription>Status and supporting financial information.</SheetDescription></SheetHeader>
-          <div className="mt-5"><RightWorkspaceRail currency={currency} locale={locale} onAction={() => setOpenSheet(null)} /></div>
+          <div className="mt-5"><RightWorkspaceRail currency={currency} locale={locale} onAction={() => setWorkspaceSheet("summary", false)} /></div>
         </SheetContent>
       </Sheet>
       <Sheet open={navigationOpen} onOpenChange={(open) => { setNavigationOpen(open); if (!open) window.setTimeout(() => navigationTrigger.current?.focus(), 0); }}>

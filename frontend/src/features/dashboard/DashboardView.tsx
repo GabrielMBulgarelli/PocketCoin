@@ -1,8 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 
-import { getDashboardEndpoint, type BalanceForecast, type CashFlowTable, type CategoryPoint, type ComparisonPoint, type CreditAccountUtilization, type CreditUtilization, type DashboardFilters, type DebtToIncome, type RecurringDebts } from "../../api/dashboard";
+import { getDashboardEndpoint, type BalanceForecast, type CashFlowTable, type CategoryPoint, type ComparisonPoint, type CreditAccountUtilization, type CreditUtilization, type DashboardFilters, type DebtToIncome, type RecentActivity, type RecurringDebts } from "../../api/dashboard";
 import { getCategories, getFinancialAccounts, getTags } from "../../api/referenceData";
-import type { Transaction } from "../../api/transactions";
 import { queryKeys } from "../../app/queryKeys";
 import { useOptionalWorkspaceRoute } from "../../app/WorkspaceRouteContext";
 import { Button } from "../../components/ui/button";
@@ -29,6 +28,12 @@ function SectionState({ title, period, query }: { title: string; period: string;
   return null;
 }
 
+function InlineSectionState({ title, query }: { title: string; query: SectionQuery }) {
+  if (query.isPending) return <p className="py-16 text-center text-sm text-muted-foreground" role="status">Loading…</p>;
+  if (query.isError) return <div className="py-10 text-center"><p className="text-sm text-destructive" role="alert">{query.error?.message ?? "This section could not be loaded."}</p><Button className="mt-4" variant="outline" onClick={() => void query.refetch()}>Retry {title.toLowerCase()}</Button></div>;
+  return null;
+}
+
 export function DashboardView({ currency, locale }: { currency: string; locale: string }) {
   const workspace = useOptionalWorkspaceRoute();
   const mode = workspace?.state.analysis ?? "forecast";
@@ -46,7 +51,7 @@ export function DashboardView({ currency, locale }: { currency: string; locale: 
   const comparison = useDashboardSection<ComparisonPoint[]>("period-comparison", effectiveFilters, validRange && mode === "cash-flow", { metric: effectiveMetric });
   const categorySpending = useDashboardSection<CategoryPoint[]>("category-spending", effectiveFilters, validRange && mode === "spending");
   const structure = useDashboardSection<CategoryPoint[]>("expense-structure", effectiveFilters, validRange && mode === "spending");
-  const recent = useDashboardSection<Transaction[]>("recent-transactions", effectiveFilters, validRange, activity === "transfers" ? {} : { kind: activity === "income" ? "income" : "expense" });
+  const recent = useDashboardSection<RecentActivity[]>("recent-transactions", effectiveFilters, validRange, { activity });
   const credit = useDashboardSection<CreditUtilization>("credit-utilization", effectiveFilters, validRange && mode === "debt");
   const creditAccounts = useDashboardSection<CreditAccountUtilization[]>("credit-account-utilization", effectiveFilters, validRange && mode === "debt");
   const recurringDebts = useDashboardSection<RecurringDebts>("recurring-debts", effectiveFilters, validRange && mode === "debt");
@@ -55,7 +60,9 @@ export function DashboardView({ currency, locale }: { currency: string; locale: 
   const shortDate = (value: string) => formatShortDate(value, locale);
   const period = validRange ? `${shortDate(filters.start_date)} – ${shortDate(filters.end_date)}` : "Adjust the date filters";
   const debtErrors = [credit, creditAccounts, recurringDebts, debtToIncome].filter((item) => item.isError).map((item) => item.error?.message ?? "A debt metric could not be loaded.");
-  const activityRows = (recent.data ?? []).filter((item) => activity === "transfers" ? item.kind.startsWith("transfer_") : item.kind === activity).filter((item, index, items) => !item.transfer_group_id || items.findIndex((candidate) => candidate.transfer_group_id === item.transfer_group_id) === index).sort((a, b) => b.transaction_date.localeCompare(a.transaction_date)).slice(0, 8);
+  const activityRows = recent.data ?? [];
+  const accountName = (id: number | null) => id === null ? "General" : accounts.data?.find((item) => item.id === id)?.name ?? "Account unavailable";
+  const categoryName = (id: number | null) => id === null ? "Uncategorized" : categories.data?.find((item) => item.id === id)?.name ?? "Category unavailable";
   const filtersControl = <DashboardFiltersControl showAccount={false} filters={filters} onChange={setFilters} accounts={accountCatalog} categories={categoryCatalog} tags={tagCatalog} onReset={reset} />;
   if (!validRange) return <div className="min-w-0 space-y-5">{filtersControl}<DashboardCard title="Invalid date range" description={period}><p className="py-8 text-sm text-destructive" role="alert">The start date must be on or before the end date.</p></DashboardCard></div>;
 
@@ -64,7 +71,7 @@ export function DashboardView({ currency, locale }: { currency: string; locale: 
     <nav aria-label="Financial analysis" className="flex gap-1 overflow-x-auto rounded-xl border bg-card p-1 shadow-sm">{(["forecast", "cash-flow", "spending", "debt"] as const).map((item) => <Button aria-current={mode === item ? "page" : undefined} className="shrink-0 capitalize" key={item} onClick={() => workspace?.update({ analysis: item })} size="sm" variant={mode === item ? "default" : "ghost"}>{item.replace("-", " ")}</Button>)}</nav>
     <div className="relative min-w-0">
       {isUpdating && <p className="absolute inset-x-0 top-3 z-10 text-center text-sm font-medium text-muted-foreground" role="status">Updating filters…</p>}
-      <div className={`space-y-5 transition-opacity ${isUpdating ? "opacity-70" : ""}`}>
+      <div aria-busy={isUpdating} className={`space-y-5 transition-opacity ${isUpdating ? "invisible" : ""}`}>
         <div className="grid gap-5 xl:grid-cols-2">
           {mode === "forecast" && (forecast.isPending || forecast.isError ? <SectionState title="Balance forecast" period={period} query={forecast} /> : <BalanceForecastCard forecast={forecast.data} formatMinor={money} shortDate={shortDate} />)}
           {mode === "cash-flow" && (cashTable.isPending || cashTable.isError ? <SectionState title="Cash flow" period={period} query={cashTable} /> : <CashFlowSummaryCard data={cashTable.data} period={<PeriodLabel kind="range" startDate={filters.start_date} endDate={filters.end_date} locale={locale} />} formatMinor={money} />)}
@@ -75,7 +82,7 @@ export function DashboardView({ currency, locale }: { currency: string; locale: 
         </div>
         {mode === "debt" && <CreditDebtSection overall={credit.data} accounts={creditAccounts.data} debts={recurringDebts.data} dti={debtToIncome.data} pending={credit.isPending || creditAccounts.isPending || recurringDebts.isPending || debtToIncome.isPending} errors={debtErrors} formatMinor={money} />}
         <DashboardCard title="Recent activity" description="Latest eight records" period={<PeriodLabel kind="range" startDate={filters.start_date} endDate={filters.end_date} locale={locale} />} actions={<nav aria-label="Recent activity kind" className="flex flex-wrap gap-1">{(["income", "expenses", "transfers"] as const).map((item) => <Button aria-current={activity === item ? "page" : undefined} key={item} onClick={() => workspace?.update({ activity: item })} size="sm" variant={activity === item ? "default" : "ghost"}>{item[0].toUpperCase() + item.slice(1)}</Button>)}</nav>}>
-          {recent.isPending || recent.isError ? <SectionState title="Recent activity" period={period} query={recent} /> : <div className="divide-y">{activityRows.length === 0 ? <p className="py-10 text-center text-sm text-muted-foreground">No {activity} match these filters.</p> : activityRows.map((item) => <div key={item.transfer_group_id ?? item.id} className="flex items-center justify-between gap-4 py-3"><div className="min-w-0"><p className="truncate text-sm font-medium">{item.description}</p><p className="text-xs text-muted-foreground">{shortDate(item.transaction_date)} · {item.kind.replace("_", " ")}{activity === "transfers" && !item.transfer_group_id ? " · incomplete" : ""}</p></div><p className="shrink-0 text-sm font-semibold tabular-nums">{money(item.amount_minor)}</p></div>)}</div>}
+          {recent.isPending || recent.isError ? <InlineSectionState title="Recent activity" query={recent} /> : <div className="divide-y">{activityRows.length === 0 ? <p className="py-10 text-center text-sm text-muted-foreground">No {activity} match these filters.</p> : activityRows.map((item) => <div key={item.transfer_group_id ?? item.id} className="flex items-center justify-between gap-4 py-3"><div className="min-w-0"><p className="truncate text-sm font-medium">{item.description}</p><p className="text-xs text-muted-foreground">{shortDate(item.transaction_date)} · {item.kind === "transfer" ? `${accountName(item.from_account_id)} → ${accountName(item.to_account_id)}` : `${categoryName(item.category_id)} · ${accountName(item.financial_account_id)}`}</p></div><p className="shrink-0 text-sm font-semibold tabular-nums">{money(item.amount_minor)}</p></div>)}</div>}
         </DashboardCard>
       </div>
     </div>

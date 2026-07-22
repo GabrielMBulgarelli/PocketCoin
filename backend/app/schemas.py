@@ -154,6 +154,19 @@ class TransactionRead(Schema):
     updated_at: datetime
 
 
+class RecentActivityRead(Schema):
+    id: int
+    transaction_date: date
+    kind: Literal["income", "expense", "transfer"]
+    amount_minor: int
+    description: str
+    category_id: int | None
+    financial_account_id: int | None
+    transfer_group_id: str | None
+    from_account_id: int | None
+    to_account_id: int | None
+
+
 class RecurrenceCreate(BaseModel):
     frequency: PlannedPaymentRecurrence
     end_date: date | None = None

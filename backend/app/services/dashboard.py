@@ -1,6 +1,7 @@
 from calendar import monthrange
 from datetime import date, timedelta
 from decimal import ROUND_HALF_UP, Decimal
+from typing import Literal
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -49,6 +50,97 @@ def _transactions(
     if tag_id is not None:
         statement = statement.join(transaction_tags).where(transaction_tags.c.tag_id == tag_id)
     return list(session.scalars(statement))
+
+
+ActivityKind = Literal["income", "expenses", "transfers"]
+
+
+def recent_activity(
+    session: Session,
+    start_date: date,
+    end_date: date,
+    activity: ActivityKind,
+    financial_account_id: int | None = None,
+    category_id: int | None = None,
+    tag_id: int | None = None,
+    without_account: bool = False,
+) -> list[dict[str, object]]:
+    if activity != "transfers":
+        kind = TransactionKind.INCOME if activity == "income" else TransactionKind.EXPENSE
+        rows = _transactions(
+            session,
+            start_date,
+            end_date,
+            financial_account_id,
+            category_id,
+            tag_id,
+            without_account,
+        )
+        matching = sorted(
+            (row for row in rows if row.kind == kind),
+            key=lambda row: (row.transaction_date, row.id),
+            reverse=True,
+        )[:8]
+        return [
+            {
+                "id": row.id,
+                "transaction_date": row.transaction_date,
+                "kind": activity.removesuffix("s"),
+                "amount_minor": row.amount_minor,
+                "description": row.description,
+                "category_id": row.category_id,
+                "financial_account_id": row.financial_account_id,
+                "transfer_group_id": None,
+                "from_account_id": None,
+                "to_account_id": None,
+            }
+            for row in matching
+        ]
+
+    if category_id is not None or tag_id is not None:
+        return []
+    transfers = [
+        row
+        for row in _transactions(session, start_date, end_date)
+        if row.kind in {TransactionKind.TRANSFER_IN, TransactionKind.TRANSFER_OUT}
+    ]
+    groups: dict[str, list[Transaction]] = {}
+    for row in transfers:
+        if row.transfer_group_id is not None:
+            groups.setdefault(row.transfer_group_id, []).append(row)
+
+    logical: list[dict[str, object]] = []
+    for group_id, rows in groups.items():
+        if financial_account_id is not None and not any(
+            row.financial_account_id == financial_account_id for row in rows
+        ):
+            continue
+        if without_account and not any(row.financial_account_id is None for row in rows):
+            continue
+        outgoing = next((row for row in rows if row.kind == TransactionKind.TRANSFER_OUT), None)
+        incoming = next((row for row in rows if row.kind == TransactionKind.TRANSFER_IN), None)
+        representative = outgoing or incoming
+        if representative is None:
+            continue
+        logical.append(
+            {
+                "id": representative.id,
+                "transaction_date": representative.transaction_date,
+                "kind": "transfer",
+                "amount_minor": representative.amount_minor,
+                "description": representative.description,
+                "category_id": None,
+                "financial_account_id": None,
+                "transfer_group_id": group_id,
+                "from_account_id": outgoing.financial_account_id if outgoing else None,
+                "to_account_id": incoming.financial_account_id if incoming else None,
+            }
+        )
+    return sorted(
+        logical,
+        key=lambda item: (item["transaction_date"], item["id"]),
+        reverse=True,
+    )[:8]
 
 
 def _signed(account: FinancialAccount, transaction: Transaction) -> int:

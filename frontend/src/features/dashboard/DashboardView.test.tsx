@@ -163,4 +163,39 @@ describe("DashboardView date-dependent queries", () => {
     expect(getCategories).toHaveBeenCalledTimes(1);
     expect(getTags).toHaveBeenCalledTimes(1);
   });
+
+  it("requests recent activity by logical activity kind", async () => {
+    renderDashboard("#/dashboard?activity=income");
+
+    await waitFor(() => expect(getDashboardEndpoint).toHaveBeenCalledWith(
+      "recent-transactions",
+      expect.any(Object),
+      { activity: "income" },
+      expect.any(AbortSignal),
+    ));
+  });
+
+  it("renders a normalized transfer with its source and destination", async () => {
+    vi.mocked(getFinancialAccounts).mockResolvedValue([
+      { id: 1, name: "Checking", kind: "checking", opening_balance_minor: 0, opening_balance_date: "2026-01-01", credit_limit_minor: null, is_active: true },
+      { id: 2, name: "Savings", kind: "savings", opening_balance_minor: 0, opening_balance_date: "2026-01-01", credit_limit_minor: null, is_active: true },
+    ]);
+    vi.mocked(getDashboardEndpoint).mockImplementation(async (path) => path === "recent-transactions" ? [{
+      id: 10,
+      transaction_date: "2026-07-13",
+      kind: "transfer",
+      amount_minor: 25_000,
+      description: "Move to savings",
+      category_id: null,
+      financial_account_id: null,
+      transfer_group_id: "transfer-1",
+      from_account_id: 1,
+      to_account_id: 2,
+    }] : endpointData[path]);
+
+    renderDashboard("#/dashboard?activity=transfers");
+
+    const description = await screen.findByText("Move to savings");
+    expect(description.parentElement).toHaveTextContent("Checking → Savings");
+  });
 });

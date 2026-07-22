@@ -1,5 +1,5 @@
 from datetime import date
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, Request, Response
 from sqlalchemy.orm import Session
@@ -38,6 +38,7 @@ from app.schemas import (
     PlannedPaymentMarkPaidRead,
     PlannedPaymentRead,
     PlannedPaymentUpdate,
+    RecentActivityRead,
     RecurrenceMaterializeRead,
     RecurringDebtsRead,
     RestoreBackupRead,
@@ -73,6 +74,7 @@ from app.services.dashboard import (
     debt_to_income,
     expense_structure,
     period_comparison,
+    recent_activity,
     recurring_debts,
 )
 from app.services.imports import (
@@ -503,28 +505,25 @@ def get_expense_structure(
     )
 
 
-@router.get("/dashboard/recent-transactions", response_model=list[TransactionRead])
+@router.get("/dashboard/recent-transactions", response_model=list[RecentActivityRead])
 def get_recent_transactions(
     session: SessionDependency,
     start_date: date,
     end_date: date,
+    activity: Literal["income", "expenses", "transfers"] = "expenses",
     financial_account_id: int | None = None,
     category_id: int | None = None,
     tag_id: int | None = None,
     without_account: bool = False,
-) -> list[TransactionRead]:
-    return list_transactions(
+) -> list[RecentActivityRead]:
+    return recent_activity(
         session,
-        8,
-        0,
-        financial_account_id,
-        category_id,
-        None,
-        None,
         start_date,
         end_date,
+        activity,
+        financial_account_id,
+        category_id,
         tag_id,
-        "date_desc",
         without_account,
     )
 

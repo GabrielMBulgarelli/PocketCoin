@@ -1,7 +1,12 @@
 from datetime import date
 
 from app.models import AccountKind, Category, CategoryDirection, FinancialAccount, TransactionKind
-from app.services.dashboard import category_spending, dashboard_summary, expense_structure
+from app.services.dashboard import (
+    category_spending,
+    dashboard_summary,
+    expense_structure,
+    recent_activity,
+)
 from app.services.transactions import (
     TransactionInput,
     TransferInput,
@@ -82,3 +87,69 @@ def test_category_and_expense_structure_group_top_five_and_other(session) -> Non
     assert [item["amount_minor"] for item in spending] == [600, 500, 400, 300, 200, 100]
     assert structure[-1] == {"name": "Other", "amount_minor": 100}
     assert len(structure) == 6
+
+
+def test_recent_activity_limits_after_filtering_by_logical_kind(session) -> None:
+    account, income, expenses = seed_account_and_categories(session)
+    create_transaction(
+        session,
+        TransactionInput(
+            account.id,
+            income.id,
+            TransactionKind.INCOME,
+            50_000,
+            date(2026, 7, 1),
+            "Monthly pay",
+        ),
+    )
+    for day in range(2, 11):
+        create_transaction(
+            session,
+            TransactionInput(
+                account.id,
+                expenses[0].id,
+                TransactionKind.EXPENSE,
+                100,
+                date(2026, 7, day),
+                f"Expense {day}",
+            ),
+        )
+
+    result = recent_activity(session, date(2026, 7, 1), date(2026, 7, 31), "income")
+
+    assert [item["description"] for item in result] == ["Monthly pay"]
+    assert result[0]["kind"] == "income"
+
+
+def test_recent_activity_normalizes_a_transfer_pair(session) -> None:
+    account, _, _ = seed_account_and_categories(session)
+    savings = FinancialAccount(
+        name="Savings",
+        kind=AccountKind.SAVINGS,
+        opening_balance_minor=0,
+        opening_balance_date=date(2026, 1, 1),
+    )
+    session.add(savings)
+    session.flush()
+    outgoing, incoming = create_transfer(
+        session,
+        TransferInput(account.id, savings.id, 2_500, date(2026, 7, 3), "Move to savings"),
+    )
+
+    result = recent_activity(session, date(2026, 7, 1), date(2026, 7, 31), "transfers")
+
+    assert result == [
+        {
+            "id": outgoing.id,
+            "transaction_date": date(2026, 7, 3),
+            "kind": "transfer",
+            "amount_minor": 2_500,
+            "description": "Move to savings",
+            "category_id": None,
+            "financial_account_id": None,
+            "transfer_group_id": outgoing.transfer_group_id,
+            "from_account_id": account.id,
+            "to_account_id": savings.id,
+        }
+    ]
+    assert incoming.transfer_group_id == outgoing.transfer_group_id

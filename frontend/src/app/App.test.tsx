@@ -10,7 +10,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-function stubApi() {
+function stubApi({ failBackup = false }: { failBackup?: boolean } = {}) {
   vi.stubGlobal(
     "fetch",
     vi.fn().mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
@@ -96,7 +96,10 @@ function stubApi() {
                       }
             : [];
 
-      return Promise.resolve({ ok: true, json: async () => payload });
+      if (failBackup && url.endsWith("/api/backups") && init?.method === "POST") {
+        return Promise.resolve({ ok: false, status: 500, json: async () => ({ message: "Backup failed" }) });
+      }
+      return Promise.resolve({ ok: true, status: 200, json: async () => payload });
     }),
   );
 }
@@ -197,6 +200,41 @@ describe("App", () => {
     fireEvent.click(await screen.findByRole("link", { name: "Transactions" }));
     expect(await screen.findByRole("heading", { name: "Transactions" })).toBeInTheDocument();
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("restores focus to each compact workspace trigger when its sheet closes", async () => {
+    stubApi();
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(<QueryClientProvider client={queryClient}><App /></QueryClientProvider>);
+
+    for (const name of ["Open context panel", "Open summary panel"]) {
+      const trigger = screen.getByLabelText(name);
+      fireEvent.click(trigger);
+      await screen.findByRole("dialog");
+      fireEvent.keyDown(document.activeElement ?? document.body, { key: "Escape" });
+      await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+      expect(trigger).toHaveFocus();
+    }
+  });
+
+  it("closes the context sheet only after a backup succeeds", async () => {
+    stubApi();
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+    render(<QueryClientProvider client={queryClient}><App /></QueryClientProvider>);
+    fireEvent.click(screen.getByLabelText("Open context panel"));
+    fireEvent.click(await within(await screen.findByRole("dialog")).findByRole("button", { name: "Backup data" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+  });
+
+  it("keeps the context sheet open when a backup fails", async () => {
+    stubApi({ failBackup: true });
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+    render(<QueryClientProvider client={queryClient}><App /></QueryClientProvider>);
+    fireEvent.click(screen.getByLabelText("Open context panel"));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Backup data" }));
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent("Backup could not be created");
+    expect(dialog).toBeInTheDocument();
   });
 
   it("keeps quick-add success feedback visible and announced at 360 px", async () => {

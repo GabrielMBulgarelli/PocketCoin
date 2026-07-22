@@ -50,17 +50,18 @@ export type RouteMetadata = {
   primaryLabel?: string;
   primary: boolean;
   accountScope: boolean;
+  rightRail: "financial" | "accounts" | "references" | "import" | "settings";
 };
 
 export const routeMetadata: Record<RoutePath, RouteMetadata> = {
-  "/dashboard": { path: "/dashboard", title: "Overview", primaryLabel: "Overview", primary: true, accountScope: true },
-  "/transactions": { path: "/transactions", title: "Transactions", primaryLabel: "Transactions", primary: true, accountScope: true },
-  "/budgets": { path: "/budgets", title: "Planning", primaryLabel: "Planning", primary: true, accountScope: true },
-  "/reports": { path: "/reports", title: "Reports", primaryLabel: "Reports", primary: true, accountScope: true },
-  "/financial-accounts": { path: "/financial-accounts", title: "Financial accounts", primary: false, accountScope: false },
-  "/categories": { path: "/categories", title: "Categories & tags", primary: false, accountScope: false },
-  "/import": { path: "/import", title: "Import", primary: false, accountScope: false },
-  "/settings": { path: "/settings", title: "Settings", primary: false, accountScope: false },
+  "/dashboard": { path: "/dashboard", title: "Overview", primaryLabel: "Overview", primary: true, accountScope: true, rightRail: "financial" },
+  "/transactions": { path: "/transactions", title: "Transactions", primaryLabel: "Transactions", primary: true, accountScope: true, rightRail: "financial" },
+  "/budgets": { path: "/budgets", title: "Planning", primaryLabel: "Planning", primary: true, accountScope: true, rightRail: "financial" },
+  "/reports": { path: "/reports", title: "Reports", primaryLabel: "Reports", primary: true, accountScope: true, rightRail: "financial" },
+  "/financial-accounts": { path: "/financial-accounts", title: "Financial accounts", primary: false, accountScope: false, rightRail: "accounts" },
+  "/categories": { path: "/categories", title: "Categories & tags", primary: false, accountScope: false, rightRail: "references" },
+  "/import": { path: "/import", title: "Import", primary: false, accountScope: false, rightRail: "import" },
+  "/settings": { path: "/settings", title: "Settings", primary: false, accountScope: false, rightRail: "settings" },
 };
 
 export const primaryRoutes = (["/dashboard", "/transactions", "/budgets", "/reports"] as const)
