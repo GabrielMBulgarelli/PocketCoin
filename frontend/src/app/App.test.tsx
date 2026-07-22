@@ -102,32 +102,32 @@ function stubApi() {
 }
 
 describe("App", () => {
-  it("redirects the retired planned-payments route to Transactions", async () => {
-    window.history.replaceState(null, "", "#/planned-payments");
+  it("replaces the retired planned-payments route with Planning Upcoming", async () => {
+    window.history.replaceState(null, "", "#/planned-payments?financial_account_id=1&month=2026-07&page=2");
     stubApi();
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
 
     render(<QueryClientProvider client={queryClient}><App /></QueryClientProvider>);
 
-    expect(await screen.findByRole("heading", { name: "Transactions" })).toBeInTheDocument();
-    expect(window.location.hash).toBe("#/transactions");
+    expect(await screen.findByRole("heading", { name: "Planning" })).toBeInTheDocument();
+    expect(window.location.hash).toBe("#/budgets?account=1&month=2026-07&planning=upcoming");
   });
 
-  it("redirects the retired planned-payments route during client navigation", async () => {
+  it("replaces the retired planned-payments route during client navigation", async () => {
     window.history.replaceState(null, "", "#/dashboard");
     stubApi();
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
 
     render(<QueryClientProvider client={queryClient}><App /></QueryClientProvider>);
-    expect(await screen.findByRole("heading", { name: "Dashboard" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Overview" })).toBeInTheDocument();
 
     act(() => {
-      window.history.replaceState(null, "", "#/planned-payments");
+      window.history.replaceState(null, "", "#/planned-payments?without_account=true");
       window.dispatchEvent(new HashChangeEvent("hashchange"));
     });
 
-    expect(await screen.findByRole("heading", { name: "Transactions" })).toBeInTheDocument();
-    expect(window.location.hash).toBe("#/transactions");
+    expect(await screen.findByRole("heading", { name: "Planning" })).toBeInTheDocument();
+    expect(window.location.hash).toBe("#/budgets?account=general&planning=upcoming");
   });
 
   it("resolves a view when its hash includes analytical parameters", async () => {
@@ -140,7 +140,7 @@ describe("App", () => {
     expect(await screen.findByRole("heading", { name: "Reports" })).toBeInTheDocument();
   });
 
-  it("displays the successful local API health status", async () => {
+  it("does not display permanent successful API chrome", async () => {
     stubApi();
 
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -151,7 +151,8 @@ describe("App", () => {
       </QueryClientProvider>,
     );
 
-    expect(await screen.findByText("Local API is available")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Overview" })).toBeInTheDocument();
+    expect(screen.queryByText("Local API is available")).not.toBeInTheDocument();
   });
 
   it("announces an outage and recovers after health returns", async () => {
@@ -172,10 +173,10 @@ describe("App", () => {
     }));
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     render(<QueryClientProvider client={queryClient}><App /></QueryClientProvider>);
-    expect(await screen.findByRole("alert")).toHaveTextContent("Local API is unavailable. PocketCoin will retry automatically.");
+    expect(await screen.findByRole("alert")).toHaveTextContent("Local API is unavailable");
     healthy = true;
     await act(async () => vi.advanceTimersByTimeAsync(5_000));
-    expect(await screen.findByText("Local API is available")).toBeInTheDocument();
+    expect(await screen.findByText("Local API connection restored.")).toBeInTheDocument();
     expect(screen.queryByText("Failed to fetch")).not.toBeInTheDocument();
   });
 
@@ -186,7 +187,7 @@ describe("App", () => {
     const trigger = screen.getByLabelText("Open navigation menu");
     fireEvent.click(trigger);
     const dialog = await screen.findByRole("dialog");
-    expect(screen.getByRole("link", { name: "Dashboard" })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("link", { name: "Overview" })).toHaveAttribute("aria-current", "page");
     await waitFor(() => expect(dialog).toContainElement(document.activeElement as HTMLElement));
     fireEvent.keyDown(document.activeElement ?? document.body, { key: "Escape" });
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());

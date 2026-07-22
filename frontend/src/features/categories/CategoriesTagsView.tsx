@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { PencilIcon, PlusIcon } from "lucide-react";
 
@@ -6,12 +6,16 @@ import { getCategories, getTags, saveCategory, saveTag, type Category, type Tag 
 import { queryKeys } from "../../app/queryKeys";
 import { invalidateFinancialQueries, mutationInvalidations } from "../../app/invalidateQueries";
 import { Button } from "../../components/ui/button";
+import { useOptionalWorkspaceRoute } from "../../app/WorkspaceRouteContext";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "../../components/ui/dialog";
 
 const field = "mt-1 h-10 w-full rounded-lg border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring";
 type Editor = { type: "category"; item: Category | null } | { type: "tag"; item: Tag | null };
 
 export function CategoriesTagsView() {
+  const workspace = useOptionalWorkspaceRoute();
+  const referenceAction = workspace?.state.referenceAction;
+  const updateRoute = workspace?.update;
   const client = useQueryClient();
   const categories = useQuery({ queryKey: queryKeys.categories, queryFn: ({ signal }) => getCategories(signal) });
   const tags = useQuery({ queryKey: queryKeys.tags, queryFn: ({ signal }) => getTags(signal) });
@@ -19,6 +23,11 @@ export function CategoriesTagsView() {
   const [error, setError] = useState("");
   const mutation = useMutation({ mutationFn: ({ type, id, data }: { type: "category" | "tag"; id: number | null; data: object }) => type === "category" ? saveCategory(id, data) : saveTag(id, data), onSuccess: async (_, variables) => { await invalidateFinancialQueries(client, mutationInvalidations[variables.type === "category" ? "categories" : "tags"]); setEditor(null); } });
   const open = (value: Editor) => { setError(""); setEditor(value); };
+  useEffect(() => {
+    if (!referenceAction || !updateRoute) return;
+    open({ type: referenceAction, item: null });
+    updateRoute({ referenceAction: undefined }, { replace: true });
+  }, [referenceAction, updateRoute]);
   const submit = (event: FormEvent<HTMLFormElement>) => { event.preventDefault(); if (!editor) return; setError(""); const data = new FormData(event.currentTarget); const name = String(data.get("name") ?? "").trim(); if (!name) return setError("Name is required."); mutation.mutate({ type: editor.type, id: editor.item?.id ?? null, data: { name, ...(editor.type === "category" && !editor.item ? { direction: data.get("direction") } : {}), ...(editor.item ? { is_active: data.get("is_active") === "on" } : {}) } }, { onError: (value) => setError(value instanceof Error ? value.message : "The change could not be saved.") }); };
   if (categories.isPending || tags.isPending) return <State text="Loading categories and tags…" />;
   if (categories.isError || tags.isError) return <State text="Categories and tags could not be loaded." error />;

@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Backup } from "../../api/backups";
-import { createBackup, listBackups, restoreBackup } from "../../api/backups";
+import { listBackups, restoreBackup } from "../../api/backups";
 import type { Settings } from "../../api/settings";
 import { updateSettings } from "../../api/settings";
 import { exportTransactions } from "../../api/transactions";
@@ -19,6 +19,8 @@ import {
 import { Button } from "../../components/ui/button";
 import { control } from "../dashboard/DashboardCards";
 import { DashboardCard } from "../dashboard/DashboardCard";
+import { useOptionalWorkspaceRoute } from "../../app/WorkspaceRouteContext";
+import { useBackupController } from "../../app/BackupControllerContext";
 
 function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -28,14 +30,13 @@ function formatSize(bytes: number): string {
 
 function DataSafetyCard({ locale }: { locale: string }) {
   const client = useQueryClient();
+  const workspace = useOptionalWorkspaceRoute();
+  const sectionRef = useRef<HTMLDivElement>(null);
   const [selected, setSelected] = useState<Backup | null>(null);
   const [confirmation, setConfirmation] = useState("");
   const [restoreError, setRestoreError] = useState("");
   const backups = useQuery({ queryKey: queryKeys.backups, queryFn: ({ signal }) => listBackups(signal) });
-  const createMutation = useMutation({
-    mutationFn: createBackup,
-    onSuccess: () => void client.invalidateQueries({ queryKey: queryKeys.backups }),
-  });
+  const createMutation = useBackupController();
   const restoreMutation = useMutation({
     mutationFn: ({ id, value }: { id: string; value: string }) => restoreBackup(id, value),
     onSuccess: () => {
@@ -44,8 +45,10 @@ function DataSafetyCard({ locale }: { locale: string }) {
     },
     onError: (error: Error) => setRestoreError(error.message),
   });
+  useEffect(() => { if (workspace?.state.settingsSection === "data-safety") sectionRef.current?.focus(); }, [workspace?.state.settingsSection]);
 
   return (
+    <div id="data-safety" ref={sectionRef} tabIndex={-1}>
     <DashboardCard title="Data safety" description="Backups stay inside PocketCoin's local data directory">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="max-w-xl text-sm text-muted-foreground">
@@ -152,6 +155,7 @@ function DataSafetyCard({ locale }: { locale: string }) {
         </AlertDialogContent>
       </AlertDialog>
     </DashboardCard>
+    </div>
   );
 }
 

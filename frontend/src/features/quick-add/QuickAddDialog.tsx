@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { getCategories, getFinancialAccounts, getTags } from "../../api/referenceData";
@@ -10,24 +10,29 @@ import { Button } from "../../components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "../../components/ui/dialog";
 
 type Mode = "expense" | "income" | "transfer";
-type Props = { open: boolean; onOpenChange: (open: boolean) => void; onCreated: (message: string) => void };
+type Props = { open: boolean; onOpenChange: (open: boolean) => void; onCreated: (message: string) => void; defaultAccountId?: string; defaultTransferSourceId?: string };
 type Values = { amount: string; date: string; description: string; accountId: string; categoryId: string; tagId: string; fromAccountId: string; toAccountId: string; notes: string; repeats: boolean; frequency: "weekly" | "monthly" | "yearly"; endMode: "never" | "date"; endDate: string; isDebt: boolean };
 
 const control = "mt-1 h-10 w-full rounded-lg border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring";
 const today = localDateValue;
-const initialValues = (): Values => ({ amount: "", date: today(), description: "", accountId: "", categoryId: "", tagId: "", fromAccountId: "", toAccountId: "", notes: "", repeats: false, frequency: "monthly", endMode: "never", endDate: "", isDebt: false });
+const initialValues = (accountId = "", fromAccountId = ""): Values => ({ amount: "", date: today(), description: "", accountId, categoryId: "", tagId: "", fromAccountId, toAccountId: "", notes: "", repeats: false, frequency: "monthly", endMode: "never", endDate: "", isDebt: false });
 const transferAccountId = (value: string): number | null => value === "general" ? null : Number(value);
 
-export function QuickAddDialog({ open, onOpenChange, onCreated }: Props) {
+export function QuickAddDialog({ open, onOpenChange, onCreated, defaultAccountId = "", defaultTransferSourceId = "" }: Props) {
   const client = useQueryClient();
   const [mode, setMode] = useState<Mode>("expense");
-  const [values, setValues] = useState<Values>(initialValues);
+  const [values, setValues] = useState<Values>(() => initialValues(defaultAccountId, defaultTransferSourceId));
+  const wasOpen = useRef(false);
   const [error, setError] = useState("");
   const needsCategories = mode !== "transfer";
   const supportsTags = mode === "expense" || mode === "income";
   const accounts = useQuery({ queryKey: queryKeys.financialAccounts, queryFn: ({ signal }) => getFinancialAccounts(signal), enabled: open });
   const categories = useQuery({ queryKey: queryKeys.categories, queryFn: ({ signal }) => getCategories(signal), enabled: open && needsCategories });
   const tags = useQuery({ queryKey: queryKeys.tags, queryFn: ({ signal }) => getTags(signal), enabled: open && supportsTags });
+  useEffect(() => {
+    if (open && !wasOpen.current) setValues(initialValues(defaultAccountId, defaultTransferSourceId));
+    wasOpen.current = open;
+  }, [defaultAccountId, defaultTransferSourceId, open]);
   const mutation = useMutation({
     mutationFn: async () => {
       const amountMinor = Math.round(Number(values.amount) * 100);
@@ -46,7 +51,7 @@ export function QuickAddDialog({ open, onOpenChange, onCreated }: Props) {
     onSuccess: async () => {
       await invalidateFinancialQueries(client, mutationInvalidations.transactions);
       const label = mode === "transfer" ? "Transfer" : mode === "income" ? "Income" : "Expense";
-      setValues(initialValues());
+      setValues(initialValues(defaultAccountId, defaultTransferSourceId));
       setError("");
       onOpenChange(false);
       onCreated(`${label} added successfully.`);
@@ -54,7 +59,7 @@ export function QuickAddDialog({ open, onOpenChange, onCreated }: Props) {
     onError: (caught) => setError(caught instanceof Error ? caught.message : "The item could not be added."),
   });
   const update = <K extends keyof Values>(key: K, value: Values[K]) => setValues((current) => ({ ...current, [key]: value }));
-  const chooseMode = (next: Mode) => { setMode(next); setError(""); setValues((current) => ({ ...initialValues(), amount: current.amount, date: current.date, description: current.description, notes: current.notes })); };
+  const chooseMode = (next: Mode) => { setMode(next); setError(""); setValues((current) => ({ ...initialValues(defaultAccountId, next === "transfer" ? defaultTransferSourceId : ""), amount: current.amount, date: current.date, description: current.description, notes: current.notes })); };
   const submit = (event: FormEvent) => { event.preventDefault(); setError(""); mutation.mutate(); };
   const activeAccounts = accounts.data?.filter((item) => item.is_active) ?? [];
   const activeCategories = categories.data?.filter((item) => item.is_active && item.direction === mode) ?? [];

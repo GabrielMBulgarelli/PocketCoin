@@ -4,6 +4,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { getTransactionTimeline, updateTransaction } from "../../api/transactions";
 import { updatePlannedPayment } from "../../api/plannedPayments";
+import { queryKeys } from "../../app/queryKeys";
+import { WorkspaceRouteProvider } from "../../app/WorkspaceRouteContext";
 import { formatShortDate } from "../../lib/format";
 import { TransactionsView } from "./TransactionsView";
 
@@ -21,9 +23,19 @@ vi.mock("../../api/plannedPayments", async (original) => {
   return { ...actual, updatePlannedPayment: vi.fn().mockResolvedValue({}) };
 });
 
-function renderTransactions() {
+function renderTransactions(hash = "#/transactions") {
+  window.history.replaceState(null, "", hash);
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(<QueryClientProvider client={client}><TransactionsView currency="CRC" locale="es-CR" /></QueryClientProvider>);
+  client.setQueryData(queryKeys.financialAccounts, [
+    { id: 1, name: "Cuenta", kind: "checking", opening_balance_minor: 0, opening_balance_date: "2026-01-01", credit_limit_minor: null, is_active: true },
+  ]);
+  return render(
+    <QueryClientProvider client={client}>
+      <WorkspaceRouteProvider>
+        <TransactionsView currency="CRC" locale="es-CR" />
+      </WorkspaceRouteProvider>
+    </QueryClientProvider>,
+  );
 }
 
 describe("TransactionsView filters and formatting", () => {
@@ -33,7 +45,7 @@ describe("TransactionsView filters and formatting", () => {
   });
 
   it("labels and edits a posted debt expense", async () => {
-    vi.mocked(getTransactionTimeline).mockResolvedValueOnce([{ row_type: "transaction", id: 9, transaction_date: "2026-07-13", kind: "expense", amount_minor: 123456, description: "Loan payment", notes: null, category_id: 2, financial_account_id: 1, transfer_group_id: null, planned_payment_id: null, scheduled_for: null, recurrence: null, end_date: null, remaining_occurrences: null, is_debt_payment: true, needs_attention: false }]);
+    vi.mocked(getTransactionTimeline).mockResolvedValue([{ row_type: "transaction", id: 9, transaction_date: "2026-07-13", kind: "expense", amount_minor: 123456, description: "Loan payment", notes: null, category_id: 2, financial_account_id: 1, transfer_group_id: null, planned_payment_id: null, scheduled_for: null, recurrence: null, end_date: null, remaining_occurrences: null, is_debt_payment: true, needs_attention: false }]);
     renderTransactions();
 
     expect(await screen.findByText("Debt")).toBeInTheDocument();
@@ -75,21 +87,19 @@ describe("TransactionsView filters and formatting", () => {
   });
 
   it("filters and labels transactions without a specific account as General", async () => {
-    vi.mocked(getTransactionTimeline).mockResolvedValueOnce([{ row_type: "transaction", id: 10, transaction_date: "2026-07-14", kind: "income", amount_minor: 5000, description: "Cash gift", notes: null, category_id: 2, financial_account_id: null, transfer_group_id: null, planned_payment_id: null, scheduled_for: null, recurrence: null, end_date: null, remaining_occurrences: null, is_debt_payment: false, needs_attention: false }]);
-    renderTransactions();
+    vi.mocked(getTransactionTimeline).mockResolvedValue([{ row_type: "transaction", id: 10, transaction_date: "2026-07-14", kind: "income", amount_minor: 5000, description: "Cash gift", notes: null, category_id: 2, financial_account_id: null, transfer_group_id: null, planned_payment_id: null, scheduled_for: null, recurrence: null, end_date: null, remaining_occurrences: null, is_debt_payment: false, needs_attention: false }]);
+    renderTransactions("#/transactions?account=general");
     expect(await screen.findByText("Cash gift")).toBeInTheDocument();
     expect(screen.getByText(/^General ·/)).toBeInTheDocument();
 
-    fireEvent.change(screen.getByLabelText("Account"), { target: { value: "general" } });
-
     await waitFor(() => expect(getTransactionTimeline).toHaveBeenLastCalledWith(expect.objectContaining({
       without_account: true,
-      financial_account_id: undefined,
     }), expect.any(AbortSignal)));
+    expect(vi.mocked(getTransactionTimeline).mock.lastCall?.[0]).not.toHaveProperty("financial_account_id");
   });
 
   it("shows only the next scheduled occurrence and its remaining count", async () => {
-    vi.mocked(getTransactionTimeline).mockResolvedValueOnce([{ row_type: "scheduled", id: 12, transaction_date: "2026-08-01", kind: "expense", amount_minor: 1500, description: "Membership", notes: null, category_id: 2, financial_account_id: null, transfer_group_id: null, planned_payment_id: 12, scheduled_for: "2026-08-01", recurrence: "monthly", end_date: null, remaining_occurrences: null, is_debt_payment: false, needs_attention: false }]);
+    vi.mocked(getTransactionTimeline).mockResolvedValue([{ row_type: "scheduled", id: 12, transaction_date: "2026-08-01", kind: "expense", amount_minor: 1500, description: "Membership", notes: null, category_id: 2, financial_account_id: null, transfer_group_id: null, planned_payment_id: 12, scheduled_for: "2026-08-01", recurrence: "monthly", end_date: null, remaining_occurrences: null, is_debt_payment: false, needs_attention: false }]);
     renderTransactions();
 
     expect(await screen.findByText("Membership")).toBeInTheDocument();
@@ -97,7 +107,7 @@ describe("TransactionsView filters and formatting", () => {
   });
 
   it("edits a scheduled occurrence without changing the future series by default", async () => {
-    vi.mocked(getTransactionTimeline).mockResolvedValueOnce([{ row_type: "scheduled", id: 12, transaction_date: "2026-08-01", kind: "expense", amount_minor: 1500, description: "Membership", notes: null, category_id: 2, financial_account_id: null, transfer_group_id: null, planned_payment_id: 12, scheduled_for: "2026-08-01", recurrence: "monthly", end_date: null, remaining_occurrences: null, is_debt_payment: false, needs_attention: false }]);
+    vi.mocked(getTransactionTimeline).mockResolvedValue([{ row_type: "scheduled", id: 12, transaction_date: "2026-08-01", kind: "expense", amount_minor: 1500, description: "Membership", notes: null, category_id: 2, financial_account_id: null, transfer_group_id: null, planned_payment_id: 12, scheduled_for: "2026-08-01", recurrence: "monthly", end_date: null, remaining_occurrences: null, is_debt_payment: false, needs_attention: false }]);
     renderTransactions();
 
     fireEvent.click(await screen.findByLabelText("Edit Membership"));

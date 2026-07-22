@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 
 import type { ComparisonMetric, DashboardFilters } from "../../api/dashboard";
+import { useOptionalWorkspaceRoute } from "../../app/WorkspaceRouteContext";
+import { scopeToApiParams } from "../../app/workspaceRouteState";
 import { localDateValue, monthStartValue } from "../../lib/format";
 
 type AnalyticsRoute = "/dashboard" | "/reports";
@@ -50,7 +52,25 @@ function readHash(route: AnalyticsRoute, defaultMetric: ComparisonMetric) {
 }
 
 export function useAnalyticsViewState(route: AnalyticsRoute, defaultMetric: ComparisonMetric) {
-  const [initial] = useState(() => readHash(route, defaultMetric));
+  const workspace = useOptionalWorkspaceRoute();
+  const hasWorkspace = workspace !== null;
+  const routeValue = workspace?.state;
+  const updateRoute = workspace?.update;
+  const fromWorkspace = useCallback(() => {
+    if (!hasWorkspace || !routeValue || routeValue.path !== route) return readHash(route, defaultMetric);
+    const fallback = defaults();
+    return {
+      filters: {
+        start_date: routeValue.from ?? fallback.start_date,
+        end_date: routeValue.to ?? fallback.end_date,
+        ...scopeToApiParams(routeValue.scope.effective),
+        category_id: routeValue.categoryId,
+        tag_id: routeValue.tagId,
+      },
+      metric: route === "/reports" ? routeValue.metric : defaultMetric,
+    };
+  }, [defaultMetric, hasWorkspace, route, routeValue]);
+  const [initial] = useState(() => fromWorkspace());
   const [filters, setFilters] = useState<DashboardFilters>(initial.filters);
   const [metric, setMetric] = useState<ComparisonMetric>(initial.metric);
   const [effective, setEffective] = useState(initial);
@@ -61,6 +81,25 @@ export function useAnalyticsViewState(route: AnalyticsRoute, defaultMetric: Comp
   }, [filters, metric]);
 
   useEffect(() => {
+    if (!updateRoute || routeValue?.path !== route) return;
+    updateRoute({
+      from: filters.start_date,
+      to: filters.end_date,
+      categoryId: filters.category_id,
+      tagId: filters.tag_id,
+      metric: route === "/reports" ? metric : routeValue.metric,
+    }, { replace: true });
+  }, [filters, metric, route, routeValue?.metric, routeValue?.path, updateRoute]);
+
+  useEffect(() => {
+    if (!hasWorkspace || routeValue?.path !== route) return;
+    const next = fromWorkspace();
+    setFilters(next.filters);
+    if (route === "/reports") setMetric(next.metric);
+  }, [fromWorkspace, hasWorkspace, route, routeValue?.path]);
+
+  useEffect(() => {
+    if (hasWorkspace) return;
     if (hashPath() !== route) return;
     const params = new URLSearchParams({ from: filters.start_date, to: filters.end_date, metric });
     if (filters.without_account) params.set("account", "general");
@@ -68,9 +107,10 @@ export function useAnalyticsViewState(route: AnalyticsRoute, defaultMetric: Comp
     if (filters.category_id) params.set("category", String(filters.category_id));
     if (filters.tag_id) params.set("tag", String(filters.tag_id));
     window.history.replaceState(window.history.state, "", `#${route}?${params.toString()}`);
-  }, [filters, metric, route]);
+  }, [filters, hasWorkspace, metric, route]);
 
   useEffect(() => {
+    if (hasWorkspace) return;
     const sync = () => {
       if (hashPath() !== route) return;
       const next = readHash(route, defaultMetric);
@@ -79,7 +119,7 @@ export function useAnalyticsViewState(route: AnalyticsRoute, defaultMetric: Comp
     };
     window.addEventListener("hashchange", sync);
     return () => window.removeEventListener("hashchange", sync);
-  }, [defaultMetric, route]);
+  }, [defaultMetric, hasWorkspace, route]);
 
   const reset = useCallback(() => {
     setFilters(defaults());

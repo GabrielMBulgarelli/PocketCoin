@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
@@ -18,6 +18,8 @@ import {
   type TransactionTimelineRow,
 } from "../../api/transactions";
 import { queryKeys } from "../../app/queryKeys";
+import { useOptionalWorkspaceRoute } from "../../app/WorkspaceRouteContext";
+import { scopeToApiParams } from "../../app/workspaceRouteState";
 import {
   invalidateFinancialQueries,
   mutationInvalidations,
@@ -53,10 +55,10 @@ export function TransactionsView({
   currency?: string;
   locale?: string;
 }) {
+  const workspace = useOptionalWorkspaceRoute();
   const client = useQueryClient();
   const [filters, setFilters] = useState({
     search: "",
-    financial_account_id: "",
     category_id: "",
     tag_id: "",
     kind: "",
@@ -85,17 +87,14 @@ export function TransactionsView({
     queryFn: ({ signal }) => getTags(signal),
   });
   const transactions = useQuery({
-    queryKey: [...queryKeys.transactions, filters, offset],
+    queryKey: [...queryKeys.transactions, workspace?.state.scope.effective ?? { kind: "all" }, filters, offset],
     queryFn: ({ signal }) => {
-      const { financial_account_id: account, ...otherFilters } = filters;
       return getTransactionTimeline(
         {
           ...Object.fromEntries(
-            Object.entries(otherFilters).filter(([, value]) => value),
+            Object.entries(filters).filter(([, value]) => value),
           ),
-          financial_account_id:
-            account && account !== "general" ? account : undefined,
-          without_account: account === "general" ? true : undefined,
+          ...scopeToApiParams(workspace?.state.scope.effective ?? { kind: "all" }),
           limit: PAGE_SIZE,
           offset,
         },
@@ -103,6 +102,8 @@ export function TransactionsView({
       );
     },
   });
+  const accountScopeKey = workspace?.state.account.kind === "account" ? `account:${workspace.state.account.accountId}` : workspace?.state.account.kind ?? "all";
+  useEffect(() => setOffset(0), [accountScopeKey]);
   const refresh = () =>
     invalidateFinancialQueries(client, mutationInvalidations.transactions);
   const editMutation = useMutation({
@@ -220,21 +221,6 @@ export function TransactionsView({
               value={filters.search}
             />
           </label>
-          <Filter
-            label="Account"
-            name="financial_account_id"
-            value={filters.financial_account_id}
-            onChange={changeFilter}
-          >
-            <option value="">All accounts</option>
-            <option value="general">General — no specific account</option>
-            {accounts.data?.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.name}
-                {item.is_active ? "" : " (inactive)"}
-              </option>
-            ))}
-          </Filter>
           <Filter
             label="Category"
             name="category_id"

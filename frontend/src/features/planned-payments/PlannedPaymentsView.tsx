@@ -15,9 +15,9 @@ const control = "mt-1 h-10 w-full rounded-lg border bg-background px-3 text-sm o
 const blank = (): FormValues => ({ title: "", amount: "", direction: "expense", dueDate: localDateValue(), recurrence: "none", isDebt: false, accountId: "", categoryId: "", notes: "", status: "pending" });
 const fromPayment = (item: PlannedPayment): FormValues => ({ title: item.title, amount: String(item.amount_minor / 100), direction: item.direction, dueDate: item.due_date, recurrence: item.recurrence, isDebt: item.is_debt_payment, accountId: item.financial_account_id ? String(item.financial_account_id) : "", categoryId: item.category_id ? String(item.category_id) : "", notes: item.notes ?? "", status: item.status === "cancelled" ? "cancelled" : "pending" });
 
-export function PlannedPaymentsView({ currency, locale }: { currency: string; locale: string }) {
+export function PlannedPaymentsView({ currency, locale, upcomingOnly = false }: { currency: string; locale: string; upcomingOnly?: boolean }) {
   const client = useQueryClient();
-  const payments = useQuery({ queryKey: queryKeys.plannedPayments, queryFn: ({ signal }) => getPlannedPayments(signal) });
+  const payments = useQuery({ queryKey: queryKeys.plannedPayments, queryFn: ({ signal }) => getPlannedPayments(signal), select: (items) => upcomingOnly ? items.filter((item) => item.status === "pending" && item.due_date >= localDateValue()).sort((a, b) => a.due_date.localeCompare(b.due_date)) : items });
   const accounts = useQuery({ queryKey: queryKeys.financialAccounts, queryFn: ({ signal }) => getFinancialAccounts(signal) });
   const categories = useQuery({ queryKey: queryKeys.categories, queryFn: ({ signal }) => getCategories(signal) });
   const [editing, setEditing] = useState<PlannedPayment | "new" | null>(null);

@@ -20,7 +20,7 @@ function CatalogSelect({ label, value, catalog, allLabel, generalLabel, onChange
   </select></label>;
 }
 
-export function DashboardFiltersControl({ filters, onChange, accounts, categories, tags, onReset, label = "Dashboard filters" }: { filters: DashboardFilters; onChange: (filters: DashboardFilters) => void; accounts: CatalogState; categories: CatalogState; tags: CatalogState; onReset: () => void; label?: string }) {
+export function DashboardFiltersControl({ filters, onChange, accounts, categories, tags, onReset, label = "Dashboard filters", showAccount = true }: { filters: DashboardFilters; onChange: (filters: DashboardFilters) => void; accounts: CatalogState; categories: CatalogState; tags: CatalogState; onReset: () => void; label?: string; showAccount?: boolean }) {
   const update = (key: keyof DashboardFilters, value: string) => onChange({ ...filters, [key]: value ? (key.endsWith("_id") ? Number(value) : value) : undefined } as DashboardFilters);
   const updateAccount = (value: string) => onChange({
     ...filters,
@@ -29,10 +29,10 @@ export function DashboardFiltersControl({ filters, onChange, accounts, categorie
   });
   const failures = [["accounts", accounts], ["categories", categories], ["tags", tags]].filter(([, catalog]) => (catalog as CatalogState).isError);
   return <section className="min-w-0 rounded-xl border bg-card p-4 shadow-sm" aria-label={label}>
-    <div className="grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-5">
+    <div className={`grid min-w-0 gap-3 sm:grid-cols-2 ${showAccount ? "xl:grid-cols-5" : "xl:grid-cols-4"}`}>
       <label className="grid min-w-0 gap-1 text-xs font-medium text-muted-foreground">From<input className={control} type="date" value={filters.start_date} onChange={(event) => update("start_date", event.target.value)} /></label>
       <label className="grid min-w-0 gap-1 text-xs font-medium text-muted-foreground">To<input className={control} type="date" value={filters.end_date} onChange={(event) => update("end_date", event.target.value)} /></label>
-      <CatalogSelect label="Account" value={filters.without_account ? "general" : filters.financial_account_id} catalog={accounts} allLabel="All accounts" generalLabel="General — no specific account" onChange={updateAccount} />
+      {showAccount && <CatalogSelect label="Account" value={filters.without_account ? "general" : filters.financial_account_id} catalog={accounts} allLabel="All accounts" generalLabel="General — no specific account" onChange={updateAccount} />}
       <CatalogSelect label="Category" value={filters.category_id} catalog={categories} allLabel="All categories" onChange={(value) => update("category_id", value)} />
       <CatalogSelect label="Tag" value={filters.tag_id} catalog={tags} allLabel="All tags" onChange={(value) => update("tag_id", value)} />
     </div>

@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getDashboardEndpoint } from "../../api/dashboard";
 import { getBudgetProgress } from "../../api/budgets";
 import { getCategories, getFinancialAccounts, getTags } from "../../api/referenceData";
+import { WorkspaceRouteProvider } from "../../app/WorkspaceRouteContext";
 import { DashboardView } from "./DashboardView";
 
 vi.mock("../../api/referenceData", () => ({
@@ -39,9 +40,16 @@ const endpointData: Record<string, unknown> = {
   "upcoming-payments": dashboardData.upcoming,
 };
 
-function renderDashboard() {
+function renderDashboard(hash = "#/dashboard") {
+  window.history.replaceState(null, "", hash);
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(<QueryClientProvider client={client}><DashboardView currency="CRC" locale="es-CR" /></QueryClientProvider>);
+  return render(
+    <QueryClientProvider client={client}>
+      <WorkspaceRouteProvider>
+        <DashboardView currency="CRC" locale="es-CR" />
+      </WorkspaceRouteProvider>
+    </QueryClientProvider>,
+  );
 }
 
 describe("DashboardView date-dependent queries", () => {
@@ -56,7 +64,7 @@ describe("DashboardView date-dependent queries", () => {
   afterEach(() => vi.clearAllMocks());
 
   it("loads budget progress for the month selected by end date", async () => {
-    renderDashboard();
+    renderDashboard("#/dashboard?analysis=spending");
     await waitFor(() => expect(getDashboardEndpoint).toHaveBeenCalled());
 
     fireEvent.change(screen.getByLabelText("To"), { target: { value: "2026-12-15" } });
@@ -65,7 +73,7 @@ describe("DashboardView date-dependent queries", () => {
   });
 
   it("shows an invalid range and pauses financial queries", async () => {
-    renderDashboard();
+    renderDashboard("#/dashboard?analysis=cash-flow");
     await waitFor(() => expect(getDashboardEndpoint).toHaveBeenCalled());
     vi.mocked(getDashboardEndpoint).mockClear();
     vi.mocked(getBudgetProgress).mockClear();
@@ -85,15 +93,15 @@ describe("DashboardView date-dependent queries", () => {
       return endpointData[path];
     });
 
-    renderDashboard();
+    renderDashboard("#/dashboard?analysis=cash-flow");
 
     expect(await screen.findByText("Cash flow unavailable")).toBeInTheDocument();
-    expect(screen.getByText("Balance")).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Period comparison" })).toBeInTheDocument();
     expect(screen.getAllByText(/CRC|₡/).length).toBeGreaterThan(0);
   });
 
   it("uses the cash-flow table summary instead of the time-series endpoint", async () => {
-    renderDashboard();
+    renderDashboard("#/dashboard?analysis=cash-flow");
 
     expect(await screen.findByRole("region", { name: "Cash flow" })).toBeInTheDocument();
     expect(getDashboardEndpoint).toHaveBeenCalledWith(
@@ -111,7 +119,7 @@ describe("DashboardView date-dependent queries", () => {
   });
 
   it("defaults period comparison to expenses", async () => {
-    renderDashboard();
+    renderDashboard("#/dashboard?analysis=cash-flow");
 
     expect(await screen.findByRole("radio", { name: "Expenses" })).toBeChecked();
     await waitFor(() => expect(getDashboardEndpoint).toHaveBeenCalledWith(
@@ -123,7 +131,7 @@ describe("DashboardView date-dependent queries", () => {
   });
 
   it("requests a new period comparison when its metric changes", async () => {
-    renderDashboard();
+    renderDashboard("#/dashboard?analysis=cash-flow");
     const income = await screen.findByRole("radio", { name: "Income" });
 
     fireEvent.click(income);
@@ -144,13 +152,13 @@ describe("DashboardView date-dependent queries", () => {
     renderDashboard();
 
     expect(await screen.findByRole("alert", { name: "Filter data unavailable" })).toHaveTextContent("accounts");
-    expect(screen.getByLabelText("Account")).toBeDisabled();
+    expect(screen.queryByLabelText("Account")).not.toBeInTheDocument();
     expect(screen.getByLabelText("Category")).toBeEnabled();
-    expect(screen.getByText("Balance")).toBeInTheDocument();
+    expect(screen.getByText("Balance forecast")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Retry filter data" }));
 
-    await waitFor(() => expect(screen.getByLabelText("Account")).toBeEnabled());
+    await waitFor(() => expect(screen.queryByRole("alert", { name: "Filter data unavailable" })).not.toBeInTheDocument());
     expect(getFinancialAccounts).toHaveBeenCalledTimes(2);
     expect(getCategories).toHaveBeenCalledTimes(1);
     expect(getTags).toHaveBeenCalledTimes(1);
