@@ -1,5 +1,5 @@
 import { Component, type ErrorInfo, type ReactNode, useEffect, useRef, useState } from "react";
-import { PanelLeftIcon, PanelRightIcon, PlusIcon } from "lucide-react";
+import { PanelLeftIcon, PanelRightIcon, PlusIcon, SettingsIcon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -52,9 +52,8 @@ class RouteErrorBoundary extends Component<{ children: ReactNode; resetKey: stri
 }
 
 export function WorkspaceShell({ children, currency, feedback, locale, onQuickAdd, outage, status, title }: WorkspaceShellProps) {
-  const { state, href, update } = useWorkspaceRoute();
+  const { state, href } = useWorkspaceRoute();
   const [openSheet, setOpenSheet] = useState<"context" | "summary" | null>(null);
-  const [filtersOpen, setFiltersOpen] = useState(false);
   const contextTrigger = useRef<HTMLButtonElement>(null);
   const summaryTrigger = useRef<HTMLButtonElement>(null);
 
@@ -65,10 +64,8 @@ export function WorkspaceShell({ children, currency, feedback, locale, onQuickAd
 
   useEffect(() => {
     setOpenSheet(null);
-    setFiltersOpen(false);
   }, [state.path]);
 
-  const planningMode = state.planning ?? "budgets";
   const routeResetKey = `${state.path}:${window.location.hash}`;
 
   return (
@@ -92,7 +89,9 @@ export function WorkspaceShell({ children, currency, feedback, locale, onQuickAd
             ))}
           </nav>
           <div className="flex items-center justify-end gap-2">
-            <Button size="sm" variant="ghost" asChild><a href={href("/settings")}>Settings</a></Button>
+            <Button className="rounded-full" size="icon" variant="ghost" asChild>
+              <a aria-label="Settings" href={href("/settings")} title="Settings"><SettingsIcon aria-hidden="true" /></a>
+            </Button>
             <Button aria-label="Quick add" className="rounded-full" size="icon" onClick={onQuickAdd}><PlusIcon /></Button>
             <Button ref={contextTrigger} aria-label="Open context panel" className="rounded-full xl:hidden" size="icon" variant="outline" onClick={() => setWorkspaceSheet("context", true)}><PanelLeftIcon /></Button>
             <Button ref={summaryTrigger} aria-label="Open summary panel" className="rounded-full xl:hidden" size="icon" variant="outline" onClick={() => setWorkspaceSheet("summary", true)}><PanelRightIcon /></Button>
@@ -112,39 +111,24 @@ export function WorkspaceShell({ children, currency, feedback, locale, onQuickAd
           <LeftWorkspaceRail />
         </aside>
         <main id="main-content" className="min-w-0" tabIndex={-1}>
-          {state.path === "/budgets" ? (
-            <nav aria-label="Planning views" className="mb-4 flex gap-2 rounded-2xl border bg-card p-2 shadow-sm">
-              {(["budgets", "upcoming"] as const).map((mode) => (
-                <Button
-                  key={mode}
-                  size="sm"
-                  variant={planningMode === mode ? "default" : "ghost"}
-                  aria-current={planningMode === mode ? "page" : undefined}
-                  onClick={() => update({ planning: mode })}
-                >
-                  {mode === "budgets" ? "Budgets" : "Upcoming"}
-                </Button>
-              ))}
-            </nav>
-          ) : null}
           <h1 className="sr-only">{title}</h1>
           <RouteErrorBoundary resetKey={routeResetKey}>{children}</RouteErrorBoundary>
         </main>
-        <aside className={cn("hidden xl:sticky xl:top-20 xl:block", filtersOpen ? "overflow-visible" : "max-h-[calc(100vh-6.25rem)] overflow-y-auto")} aria-label="Workspace summary">
-          <RightWorkspaceRail currency={currency} filtersOpen={filtersOpen} locale={locale} onFiltersOpenChange={setFiltersOpen} />
+        <aside className="hidden max-h-[calc(100vh-6.25rem)] overflow-y-auto xl:sticky xl:top-20 xl:block" aria-label="Workspace summary">
+          <RightWorkspaceRail currency={currency} locale={locale} />
         </aside>
       </div>
 
       <Sheet open={openSheet === "context"} onOpenChange={(open) => setWorkspaceSheet("context", open)}>
         <SheetContent side="left" className="overflow-y-auto">
-          <SheetHeader><SheetTitle>Context</SheetTitle><SheetDescription>Accounts, management, and quick tools.</SheetDescription></SheetHeader>
+          <SheetHeader><SheetTitle>Context</SheetTitle><SheetDescription>Accounts, management, and workspace tools for this view.</SheetDescription></SheetHeader>
           <div className="mt-5"><LeftWorkspaceRail onAction={() => setWorkspaceSheet("context", false)} /></div>
         </SheetContent>
       </Sheet>
       <Sheet open={openSheet === "summary"} onOpenChange={(open) => setWorkspaceSheet("summary", open)}>
         <SheetContent side="right" className="overflow-y-auto">
           <SheetHeader><SheetTitle>Summary</SheetTitle><SheetDescription>Status and supporting financial information.</SheetDescription></SheetHeader>
-          <div className="mt-5"><RightWorkspaceRail currency={currency} filtersOpen={filtersOpen} locale={locale} onAction={() => setWorkspaceSheet("summary", false)} onFiltersOpenChange={setFiltersOpen} /></div>
+          <div className="mt-5"><RightWorkspaceRail currency={currency} locale={locale} onAction={() => setWorkspaceSheet("summary", false)} /></div>
         </SheetContent>
       </Sheet>
     </div>

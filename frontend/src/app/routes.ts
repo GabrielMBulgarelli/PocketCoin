@@ -3,7 +3,6 @@ export const routes = [
   ["/transactions", "Transactions"],
   ["/financial-accounts", "Financial accounts"],
   ["/categories", "Categories & tags"],
-  ["/budgets", "Planning"],
   ["/import", "Import"],
   ["/reports", "Reports"],
   ["/settings", "Settings"],
@@ -13,6 +12,6 @@ export type RoutePath = (typeof routes)[number][0];
 
 export function routeFor(path: string): RoutePath {
   const routePath = path.split("?", 1)[0];
-  if (routePath === "/planned-payments") return "/budgets";
+  if (routePath === "/planned-payments" || routePath === "/budgets") return "/dashboard";
   return routes.some(([route]) => route === routePath) ? (routePath as RoutePath) : "/dashboard";
 }

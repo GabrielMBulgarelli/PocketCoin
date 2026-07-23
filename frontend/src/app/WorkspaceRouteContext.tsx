@@ -63,7 +63,7 @@ export function WorkspaceRouteProvider({ children }: { children: ReactNode }) {
       ...patch,
       path,
       account,
-      scope: resolveEffectiveScope(account, path, accountCatalog),
+      scope: resolveEffectiveScope(account, path, accountCatalog, patch.analysis ?? state.analysis),
     };
     const target = routeHref(path, candidate);
     if (window.location.hash === target) {

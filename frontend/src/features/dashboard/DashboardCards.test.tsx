@@ -15,9 +15,12 @@ vi.mock("recharts", async (importOriginal) => {
         data-max-bar-size={props.maxBarSize}
         data-testid="bar-chart"
       >
-        <actual.BarChart {...props} />
+        {props.children}
       </div>
     ),
+    Bar: () => null,
+    CartesianGrid: () => null,
+    Cell: () => null,
     Legend: () => (
       <div>
         <span>Current</span>
@@ -25,6 +28,28 @@ vi.mock("recharts", async (importOriginal) => {
         <span>Prior year</span>
       </div>
     ),
+    Pie: (props: React.ComponentProps<typeof actual.Pie>) => (
+      <div
+        data-inner-radius={props.innerRadius}
+        data-name-key={String(props.nameKey)}
+        data-outer-radius={props.outerRadius}
+        data-tooltip-name={
+          (props.data?.[0] as { tooltip_name?: string } | undefined)?.tooltip_name
+        }
+        data-testid="expense-breakdown-pie"
+      >
+        {props.children}
+      </div>
+    ),
+    PieChart: (props: React.ComponentProps<typeof actual.PieChart>) => <>{props.children}</>,
+    ResponsiveContainer: (
+      props: React.ComponentProps<typeof actual.ResponsiveContainer>,
+    ) => <>{props.children}</>,
+    Tooltip: ({ formatter }: { formatter?: (value: number) => string }) => (
+      <div data-testid="tooltip-formatted-value">{formatter?.(75)}</div>
+    ),
+    XAxis: () => null,
+    YAxis: () => null,
   };
 });
 
@@ -89,12 +114,14 @@ describe("dashboard chart alternatives", () => {
     expect(screen.getAllByText("Prior year")).toHaveLength(1);
   });
 
-  it("shows category values and percentages as text", () => {
-    render(<ExpenseStructureCard
-      data={[{ name: "Food", amount_minor: 75 }, { name: "Other", amount_minor: 25 }]}
-      formatMinor={money}
-      reportHref="#/reports?from=2026-07-01&to=2026-07-31"
-    />);
+  it("shows category values while keeping percentages in accessible and tooltip text", () => {
+    render(
+      <ExpenseStructureCard
+        className="h-full"
+        data={[{ name: "Food", amount_minor: 75 }, { name: "Other", amount_minor: 25 }]}
+        formatMinor={money}
+      />,
+    );
 
     expect(screen.getByText("Total Expenses")).toBeInTheDocument();
     expect(screen.getByText("$100")).toBeInTheDocument();
@@ -102,18 +129,41 @@ describe("dashboard chart alternatives", () => {
     const values = screen.getByRole("list", { name: "Expense breakdown values" });
     const food = within(values).getByRole("listitem", { name: "Food, 75%, $75" });
     expect(within(food).getByText("Food")).toBeInTheDocument();
-    expect(within(food).getByText("75%")).toBeInTheDocument();
+    expect(within(food).queryByText("75%")).not.toBeInTheDocument();
     expect(within(food).getByText("$75")).toBeInTheDocument();
+    expect(food).toHaveClass(
+      "grid-cols-[minmax(0,1fr)_minmax(5.5rem,auto)]",
+    );
 
     const other = within(values).getByRole("listitem", { name: "Other, 25%, $25" });
     expect(within(other).getByText("Other")).toBeInTheDocument();
-    expect(within(other).getByText("25%")).toBeInTheDocument();
+    expect(within(other).queryByText("25%")).not.toBeInTheDocument();
     expect(within(other).getByText("$25")).toBeInTheDocument();
 
-    expect(screen.getByRole("link", { name: "View full report" })).toHaveAttribute(
-      "href",
-      "#/reports?from=2026-07-01&to=2026-07-31",
+    expect(screen.queryByRole("link", { name: "View full report" })).not.toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Expense Breakdown" })).toHaveClass("h-full");
+    const donutContainer = screen.getByTestId("expense-breakdown-donut").parentElement;
+    expect(donutContainer).toHaveClass("size-64");
+    expect(donutContainer?.parentElement).toHaveClass(
+      "md:grid-cols-[16rem_minmax(0,1fr)]",
     );
+    expect(screen.getByTestId("expense-breakdown-pie")).toHaveAttribute(
+      "data-inner-radius",
+      "80",
+    );
+    expect(screen.getByTestId("expense-breakdown-pie")).toHaveAttribute(
+      "data-outer-radius",
+      "120",
+    );
+    expect(screen.getByTestId("expense-breakdown-pie")).toHaveAttribute(
+      "data-name-key",
+      "tooltip_name",
+    );
+    expect(screen.getByTestId("expense-breakdown-pie")).toHaveAttribute(
+      "data-tooltip-name",
+      "Food · 75%",
+    );
+    expect(screen.getByTestId("tooltip-formatted-value")).toHaveTextContent("$75");
   });
 
   it("wraps long category names downward without overlapping value columns", () => {
@@ -138,6 +188,9 @@ describe("dashboard chart alternatives", () => {
     });
 
     expect(row).toHaveClass("items-start");
+    expect(row).toHaveClass(
+      "grid-cols-[minmax(0,1fr)_minmax(5.5rem,auto)]",
+    );
     expect(utilitiesRow).toHaveClass("items-start");
     expect(label).toHaveClass("whitespace-normal");
     expect(label).toHaveClass("break-words");

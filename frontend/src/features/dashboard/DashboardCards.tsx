@@ -65,17 +65,25 @@ export function CategorySpendingCard({ data, context, formatMinor }: ChartProps 
   return <DashboardCard title="Category spending" description={context}>{data.length === 0 ? <p className="grid h-72 place-items-center text-sm text-muted-foreground">No category spending in this period.</p> : <><div className="h-72" aria-hidden="true"><ResponsiveContainer width="100%" height="100%"><BarChart data={data} layout="vertical" margin={{ left: 20 }}><CartesianGrid horizontal={false} strokeDasharray="3 3" /><XAxis type="number" tickFormatter={(value) => formatMinor(value)} /><YAxis dataKey="name" type="category" width={90} /><Tooltip formatter={(value) => formatMinor(Number(value))} /><Bar isAnimationActive={false} dataKey="amount_minor" name="Expenses" fill={chartColors.expense} radius={[0, 5, 5, 0]} /></BarChart></ResponsiveContainer></div><ul className="mt-3 grid gap-1 text-xs text-muted-foreground" aria-label="Category spending values">{data.map((item) => <li className="flex justify-between gap-3" key={item.name}><span>{item.name}</span><span className="tabular-nums">{formatMinor(item.amount_minor)}</span></li>)}</ul></>}</DashboardCard>;
 }
 
-export function ExpenseStructureCard({ data, formatMinor, reportHref }: ChartProps & { data: CategoryPoint[]; reportHref?: string }) {
+export function ExpenseStructureCard({ className, data, formatMinor }: ChartProps & { className?: string; data: CategoryPoint[] }) {
   const total = data.reduce((sum, item) => sum + item.amount_minor, 0);
   const isEmpty = total <= 0;
-  return <DashboardCard title="Expense Breakdown" description="Top five categories and Other">{isEmpty ? <p className="grid h-64 place-items-center text-sm text-muted-foreground">No expenses to structure.</p> : <>
-    <div className="grid min-w-0 items-center gap-6 md:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
-      <div className="relative mx-auto size-56 max-w-full">
+  const chartData = isEmpty ? [] : data.map((item) => {
+    const percentage = Math.round(item.amount_minor / total * 100);
+    return {
+      ...item,
+      percentage,
+      tooltip_name: `${item.name} · ${percentage}%`,
+    };
+  });
+  return <DashboardCard className={className} title="Expense Breakdown" description="Top five categories and Other">{isEmpty ? <p className="grid h-64 place-items-center text-sm text-muted-foreground">No expenses to structure.</p> : <>
+    <div className="grid min-w-0 items-center gap-6 md:grid-cols-[16rem_minmax(0,1fr)]">
+      <div className="relative mx-auto size-64 max-w-full">
         <div className="absolute inset-0" aria-hidden="true" data-testid="expense-breakdown-donut">
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
-              <Pie isAnimationActive={false} data={data} dataKey="amount_minor" nameKey="name" innerRadius={70} outerRadius={104} paddingAngle={2} stroke="none">
-                {data.map((item) => <Cell key={item.name} fill={categoryColor(item.name)} stroke="none" />)}
+              <Pie isAnimationActive={false} data={chartData} dataKey="amount_minor" nameKey="tooltip_name" innerRadius={80} outerRadius={120} paddingAngle={2} stroke="none">
+                {chartData.map((item) => <Cell key={item.name} fill={categoryColor(item.name)} stroke="none" />)}
               </Pie>
               <Tooltip formatter={(value) => formatMinor(Number(value))} />
             </PieChart>
@@ -87,19 +95,16 @@ export function ExpenseStructureCard({ data, formatMinor, reportHref }: ChartPro
         </div>
       </div>
       <ul className="grid min-w-0 gap-3 text-sm" aria-label="Expense breakdown values">
-        {data.map((item) => {
-          const percentage = Math.round(item.amount_minor / total * 100);
-          return <li aria-label={`${item.name}, ${percentage}%, ${formatMinor(item.amount_minor)}`} className="grid min-w-0 grid-cols-[minmax(0,1fr)_3rem_minmax(5.5rem,auto)] items-start gap-3" key={item.name}>
+        {chartData.map((item) => {
+          return <li aria-label={`${item.name}, ${item.percentage}%, ${formatMinor(item.amount_minor)}`} className="grid min-w-0 grid-cols-[minmax(0,1fr)_minmax(5.5rem,auto)] items-start gap-3" key={item.name}>
             <span className="flex min-w-0 items-start gap-2">
               <span aria-hidden="true" className="mt-1.5 size-2.5 shrink-0 rounded-full" style={{ backgroundColor: categoryColor(item.name) }} />
               <span className="min-w-0 whitespace-normal break-words font-medium">{item.name}</span>
             </span>
-            <span className="text-right tabular-nums text-muted-foreground">{percentage}%</span>
             <span className="min-w-0 break-words text-right font-medium tabular-nums">{formatMinor(item.amount_minor)}</span>
           </li>;
         })}
       </ul>
     </div>
-    {reportHref && <a className="mt-5 inline-flex min-h-11 items-center gap-2 text-sm font-semibold text-primary underline-offset-4 hover:underline focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" href={reportHref}>View full report <span aria-hidden="true">→</span></a>}
   </>}</DashboardCard>;
 }

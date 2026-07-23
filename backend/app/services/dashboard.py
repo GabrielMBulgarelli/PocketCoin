@@ -80,7 +80,7 @@ def recent_activity(
             (row for row in rows if row.kind == kind),
             key=lambda row: (row.transaction_date, row.id),
             reverse=True,
-        )[:8]
+        )[:5]
         return [
             {
                 "id": row.id,
@@ -140,7 +140,7 @@ def recent_activity(
         logical,
         key=lambda item: (item["transaction_date"], item["id"]),
         reverse=True,
-    )[:8]
+    )[:5]
 
 
 def _signed(account: FinancialAccount, transaction: Transaction) -> int:

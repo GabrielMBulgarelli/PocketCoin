@@ -121,6 +121,91 @@ def test_recent_activity_limits_after_filtering_by_logical_kind(session) -> None
     assert result[0]["kind"] == "income"
 
 
+def test_recent_activity_returns_only_the_newest_five_income_and_expenses(session) -> None:
+    account, income, expenses = seed_account_and_categories(session)
+    for day in range(1, 8):
+        create_transaction(
+            session,
+            TransactionInput(
+                account.id,
+                income.id,
+                TransactionKind.INCOME,
+                day * 100,
+                date(2026, 7, day),
+                f"Income {day}",
+            ),
+        )
+        create_transaction(
+            session,
+            TransactionInput(
+                account.id,
+                expenses[0].id,
+                TransactionKind.EXPENSE,
+                day * 100,
+                date(2026, 7, day),
+                f"Expense {day}",
+            ),
+        )
+
+    income_result = recent_activity(
+        session, date(2026, 7, 1), date(2026, 7, 31), "income"
+    )
+    expense_result = recent_activity(
+        session, date(2026, 7, 1), date(2026, 7, 31), "expenses"
+    )
+
+    assert [item["description"] for item in income_result] == [
+        "Income 7",
+        "Income 6",
+        "Income 5",
+        "Income 4",
+        "Income 3",
+    ]
+    assert [item["description"] for item in expense_result] == [
+        "Expense 7",
+        "Expense 6",
+        "Expense 5",
+        "Expense 4",
+        "Expense 3",
+    ]
+
+
+def test_recent_activity_returns_only_the_newest_five_normalized_transfers(session) -> None:
+    account, _, _ = seed_account_and_categories(session)
+    savings = FinancialAccount(
+        name="Savings",
+        kind=AccountKind.SAVINGS,
+        opening_balance_minor=0,
+        opening_balance_date=date(2026, 1, 1),
+    )
+    session.add(savings)
+    session.flush()
+    for day in range(1, 8):
+        create_transfer(
+            session,
+            TransferInput(
+                account.id,
+                savings.id,
+                day * 100,
+                date(2026, 7, day),
+                f"Transfer {day}",
+            ),
+        )
+
+    result = recent_activity(
+        session, date(2026, 7, 1), date(2026, 7, 31), "transfers"
+    )
+
+    assert [item["description"] for item in result] == [
+        "Transfer 7",
+        "Transfer 6",
+        "Transfer 5",
+        "Transfer 4",
+        "Transfer 3",
+    ]
+    assert all(item["kind"] == "transfer" for item in result)
+
+
 def test_recent_activity_normalizes_a_transfer_pair(session) -> None:
     account, _, _ = seed_account_and_categories(session)
     savings = FinancialAccount(

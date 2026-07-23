@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { createBackup } from "../../api/backups";
 import type { Settings } from "../../api/settings";
 import { updateSettings } from "../../api/settings";
 import { exportTransactions } from "../../api/transactions";
@@ -40,8 +41,22 @@ function renderSettings() {
 
 describe("SettingsView", () => {
   beforeEach(() => {
+    vi.mocked(createBackup).mockResolvedValue({
+      id: "backup-1",
+      created_at: "2026-07-23T12:00:00Z",
+      size_bytes: 1024,
+      reason: "manual",
+    });
     vi.mocked(updateSettings).mockResolvedValue(settings);
     vi.mocked(exportTransactions).mockResolvedValue();
+  });
+
+  it("links to the dedicated CSV importer", () => {
+    renderSettings();
+
+    const card = screen.getByRole("heading", { name: "Import CSV" }).closest("section");
+    expect(card).not.toBeNull();
+    expect(within(card!).getByRole("link", { name: "Import CSV" })).toHaveAttribute("href", "#/import");
   });
 
   it("uses fixed currency and locale selects submitted by the card header action", async () => {
@@ -82,5 +97,14 @@ describe("SettingsView", () => {
     const status = await screen.findByRole("status", { name: "CSV export status" });
     expect(status).toHaveTextContent("CSV exported successfully.");
     expect(status).toHaveClass("rounded-lg", "border");
+  });
+
+  it("creates a backup from Data safety", async () => {
+    renderSettings();
+
+    fireEvent.click(screen.getByRole("button", { name: "Create backup" }));
+
+    await waitFor(() => expect(createBackup).toHaveBeenCalledOnce());
+    expect(await screen.findByRole("status")).toHaveTextContent("Backup created successfully.");
   });
 });

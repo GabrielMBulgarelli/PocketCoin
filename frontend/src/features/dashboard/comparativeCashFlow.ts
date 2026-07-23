@@ -1,5 +1,7 @@
 import type { CashFlowPoint } from "../../api/dashboard";
 
+const CASH_FLOW_EXTENT_INCREMENT_MINOR = 10_000 * 100;
+
 export type ComparativeCashFlowRow = {
   label: string;
   income_minor: number;
@@ -57,10 +59,8 @@ export function comparativeCashFlowTotals(data: ComparativeCashFlowRow[]) {
 
 export function symmetricCashFlowExtent(data: ComparativeCashFlowRow[]) {
   const maximum = Math.max(0, ...data.flatMap((item) => [item.income_minor, item.expense_minor]));
-  if (maximum === 0) return 1;
-
-  const magnitude = 10 ** Math.floor(Math.log10(maximum));
-  const normalized = maximum / magnitude;
-  const ceiling = [1, 2, 3, 6, 10].find((candidate) => normalized <= candidate) ?? 10;
-  return ceiling * magnitude;
+  return maximum === 0
+    ? 1
+    : Math.ceil(maximum * 1.05 / CASH_FLOW_EXTENT_INCREMENT_MINOR)
+      * CASH_FLOW_EXTENT_INCREMENT_MINOR;
 }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { formatMinor, localDateValue, localMonthValue, monthStartValue } from "./format";
+import { formatMinor, localDateValue, localMonthValue, monthEndValue, monthStartValue } from "./format";
 
 describe("currency formatting", () => {
   it("uses the narrow Dollar symbol", () => {
@@ -41,5 +41,12 @@ describe("local calendar values", () => {
     expect(monthStartValue("2026-12-31")).toBe("2026-12-01");
 
     process.env.TZ = previousTimezone;
+  });
+
+  it("returns the final calendar day for ordinary, boundary, and leap-year months", () => {
+    expect(monthEndValue("2026-01")).toBe("2026-01-31");
+    expect(monthEndValue("2026-02")).toBe("2026-02-28");
+    expect(monthEndValue("2028-02")).toBe("2028-02-29");
+    expect(monthEndValue("2026-12")).toBe("2026-12-31");
   });
 });

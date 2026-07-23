@@ -15,6 +15,12 @@ vi.mock("../../api/referenceData", () => ({
 }));
 vi.mock("../../api/budgets", () => ({ getBudgetProgress: vi.fn().mockResolvedValue([]) }));
 vi.mock("../../api/dashboard", () => ({ getDashboardEndpoint: vi.fn() }));
+vi.mock("../budgets/BudgetsView", () => ({
+  BudgetsView: () => <section aria-label="Budgets">Budgets content</section>,
+}));
+vi.mock("../planned-payments/PlannedPaymentsView", () => ({
+  PlannedPaymentsView: () => <section aria-label="Upcoming">Upcoming content</section>,
+}));
 
 const dashboardData = {
   summary: { balance_minor: 0, income_minor: 0, expense_minor: 0, net_minor: 0, savings_rate: null },
@@ -70,11 +76,27 @@ describe("DashboardView date-dependent queries", () => {
     expect(within(navigation).getAllByRole("button").map((button) => button.textContent)).toEqual([
       "Cash Flow",
       "Forecast",
-      "Spending",
-      "Debt",
+      "Planning",
     ]);
     expect(within(navigation).getByRole("button", { name: "Cash Flow" })).toHaveAttribute("aria-current", "page");
     expect(await screen.findByRole("region", { name: "Cash flow" })).toBeInTheDocument();
+  });
+
+  it("shows Budgets, Upcoming, and Category spending without owning Recent activity", async () => {
+    renderDashboard("#/dashboard?month=2028-02&analysis=planning");
+
+    const planning = await screen.findByTestId("planning-grid");
+    expect(planning).toHaveClass("grid", "lg:grid-cols-2");
+    expect(within(planning).getByRole("region", { name: "Budgets" })).toBeInTheDocument();
+    expect(within(planning).getByRole("region", { name: "Upcoming" })).toBeInTheDocument();
+    expect(await screen.findByRole("region", { name: "Category spending" })).toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Recent activity" })).not.toBeInTheDocument();
+    await waitFor(() => expect(getDashboardEndpoint).toHaveBeenCalledWith(
+      "category-spending",
+      expect.objectContaining({ start_date: "2028-02-01", end_date: "2028-02-29" }),
+      {},
+      expect.any(AbortSignal),
+    ));
   });
 
   it("honors an explicit Forecast Overview deep link", async () => {
@@ -83,22 +105,31 @@ describe("DashboardView date-dependent queries", () => {
     expect(await screen.findByRole("region", { name: "Balance forecast" })).toBeInTheDocument();
   });
 
-  it("loads budget progress for the month selected by end date", async () => {
-    renderDashboard("#/dashboard?analysis=spending");
-    await waitFor(() => expect(getDashboardEndpoint).toHaveBeenCalled());
+  it("places the comparative and expense breakdown cards in equal desktop columns", async () => {
+    renderDashboard("#/dashboard?analysis=cash-flow");
 
-    fireEvent.change(screen.getByLabelText("To"), { target: { value: "2026-12-15" } });
+    const comparative = await screen.findByRole("region", { name: "Comparative Bar Chart" });
+    const breakdown = screen.getByRole("region", { name: "Expense Breakdown" });
 
-    await waitFor(() => expect(getBudgetProgress).toHaveBeenCalledWith("2026-12-01", expect.any(AbortSignal)));
+    expect(comparative.parentElement).toHaveClass("xl:col-span-1");
+    expect(breakdown.parentElement).toHaveClass("xl:col-span-1");
+    expect(comparative).toHaveClass("h-full");
+    expect(breakdown).toHaveClass("h-full");
+    expect(screen.queryByRole("link", { name: "View full report" })).not.toBeInTheDocument();
+    expect(getDashboardEndpoint).toHaveBeenCalledWith(
+      "expense-structure",
+      expect.any(Object),
+      {},
+      expect.any(AbortSignal),
+    );
   });
 
-  it("keeps the expense breakdown to one desktop grid column", async () => {
-    renderDashboard("#/dashboard?analysis=spending");
+  it("does not render or request the Cash Flow expense breakdown from Planning", async () => {
+    renderDashboard("#/dashboard?analysis=planning");
 
-    const card = await screen.findByRole("region", { name: "Expense Breakdown" });
-
-    expect(card.parentElement).toHaveClass("xl:col-span-1");
-    expect(card.parentElement).not.toHaveClass("xl:col-span-2");
+    expect(await screen.findByRole("region", { name: "Category spending" })).toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Expense Breakdown" })).not.toBeInTheDocument();
+    expect(vi.mocked(getDashboardEndpoint).mock.calls.some(([path]) => path === "expense-structure")).toBe(false);
   });
 
   it("shows an invalid range and pauses financial queries", async () => {
@@ -207,38 +238,9 @@ describe("DashboardView date-dependent queries", () => {
     expect(getTags).toHaveBeenCalledTimes(1);
   });
 
-  it("requests recent activity by logical activity kind", async () => {
+  it("does not request recent activity from the center workspace", async () => {
     renderDashboard("#/dashboard?activity=income");
-
-    await waitFor(() => expect(getDashboardEndpoint).toHaveBeenCalledWith(
-      "recent-transactions",
-      expect.any(Object),
-      { activity: "income" },
-      expect.any(AbortSignal),
-    ));
-  });
-
-  it("renders a normalized transfer with its source and destination", async () => {
-    vi.mocked(getFinancialAccounts).mockResolvedValue([
-      { id: 1, name: "Checking", kind: "checking", opening_balance_minor: 0, opening_balance_date: "2026-01-01", credit_limit_minor: null, is_active: true },
-      { id: 2, name: "Savings", kind: "savings", opening_balance_minor: 0, opening_balance_date: "2026-01-01", credit_limit_minor: null, is_active: true },
-    ]);
-    vi.mocked(getDashboardEndpoint).mockImplementation(async (path) => path === "recent-transactions" ? [{
-      id: 10,
-      transaction_date: "2026-07-13",
-      kind: "transfer",
-      amount_minor: 25_000,
-      description: "Move to savings",
-      category_id: null,
-      financial_account_id: null,
-      transfer_group_id: "transfer-1",
-      from_account_id: 1,
-      to_account_id: 2,
-    }] : endpointData[path]);
-
-    renderDashboard("#/dashboard?activity=transfers");
-
-    const description = await screen.findByText("Move to savings");
-    expect(description.parentElement).toHaveTextContent("Checking → Savings");
+    await screen.findByRole("region", { name: "Cash flow" });
+    expect(vi.mocked(getDashboardEndpoint).mock.calls.some(([path]) => path === "recent-transactions")).toBe(false);
   });
 });

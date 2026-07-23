@@ -48,29 +48,29 @@ export function ComparativeCashFlowCard({
 
   return (
     <DashboardCard
+      className="h-full"
       title="Comparative Bar Chart"
       period={period}
-      className="xl:col-span-2"
-      contentClassName="mt-3"
-    >
-      <div className="flex min-w-0 flex-wrap items-end justify-between gap-x-6 gap-y-4">
-        <div>
+      actions={(
+        <div className="max-w-48 break-words text-right">
           <p className="text-xs font-medium text-muted-foreground">Net cash flow</p>
-          <p className={`mt-1 break-words text-2xl font-semibold tracking-tight tabular-nums ${netTone}`}>
+          <p className={`mt-1 text-2xl font-semibold tracking-tight tabular-nums ${netTone}`}>
             {formatMinor(totals.net_minor)}
           </p>
         </div>
-        <ul aria-label="Comparative chart legend" className="flex flex-wrap items-center gap-5 text-xs font-medium" role="list">
-          <li className="flex items-center gap-2">
-            <span aria-hidden="true" className="size-2.5 rounded-sm" style={{ backgroundColor: chartColors.income }} />
-            Income
-          </li>
-          <li className="flex items-center gap-2">
-            <span aria-hidden="true" className="size-2.5 rounded-sm" style={{ backgroundColor: chartColors.cashFlowExpense }} />
-            Expenses
-          </li>
-        </ul>
-      </div>
+      )}
+      contentClassName="mt-3"
+    >
+      <ul aria-label="Comparative chart legend" className="flex flex-wrap items-center justify-end gap-5 text-xs font-medium" role="list">
+        <li className="flex items-center gap-2">
+          <span aria-hidden="true" className="size-2.5 rounded-sm" style={{ backgroundColor: chartColors.income }} />
+          Income
+        </li>
+        <li className="flex items-center gap-2">
+          <span aria-hidden="true" className="size-2.5 rounded-sm" style={{ backgroundColor: chartColors.cashFlowExpense }} />
+          Expenses
+        </li>
+      </ul>
 
       <dl aria-label="Comparative cash flow totals" className="sr-only" role="list">
         <div role="listitem"><dt>Income</dt><dd>{formatMinor(totals.income_minor)}</dd></div>
@@ -79,11 +79,11 @@ export function ComparativeCashFlowCard({
 
       <div className="mt-4 border-t pt-3">
         {isEmpty ? (
-          <p className="grid h-72 place-items-center text-center text-sm text-muted-foreground">
+          <p className="grid h-64 place-items-center text-center text-sm text-muted-foreground">
             No income or expenses in this period.
           </p>
         ) : (
-          <div className="h-72 min-w-0" aria-hidden="true">
+          <div className="h-64 min-w-0" aria-hidden="true">
             <ResponsiveContainer height="100%" width="100%">
               <BarChart data={rows} margin={{ bottom: 0, left: 0, right: 4, top: 2 }} stackOffset="sign">
                 <CartesianGrid strokeDasharray="3 3" vertical={false} />

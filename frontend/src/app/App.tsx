@@ -9,7 +9,6 @@ import { CategoriesTagsView } from "../features/categories/CategoriesTagsView";
 import { DashboardView } from "../features/dashboard/DashboardView";
 import { FinancialAccountsView } from "../features/financial-accounts/FinancialAccountsView";
 import { TransactionsView } from "../features/transactions/TransactionsView";
-import { BudgetsView } from "../features/budgets/BudgetsView";
 import { QuickAddDialog } from "../features/quick-add/QuickAddDialog";
 import { ImportView } from "../features/imports/ImportView";
 import { ReportsView } from "../features/reports/ReportsView";
@@ -108,7 +107,6 @@ function RouteOutlet({ currency, locale, path, settings, settingsError, settings
   if (path === "/financial-accounts") return <FinancialAccountsView currency={currency} locale={locale} />;
   if (path === "/categories") return <CategoriesTagsView />;
   if (path === "/transactions") return <TransactionsView currency={currency} locale={locale} />;
-  if (path === "/budgets") return <BudgetsView currency={currency} locale={locale} />;
   if (path === "/import") return <ImportView currency={currency} locale={locale} />;
   if (path === "/reports") return <ReportsView currency={currency} locale={locale} />;
   return <SettingsView settings={settings} loading={settingsLoading} loadError={settingsError} />;

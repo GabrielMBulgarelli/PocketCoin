@@ -1,45 +1,563 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { createPlannedPayment, deletePlannedPayment, getPlannedPayments, markPlannedPaymentPaid, updatePlannedPayment, type PaymentDirection, type PaymentRecurrence, type PlannedPayment, type PlannedPaymentInput } from "../../api/plannedPayments";
+import {
+  createPlannedPayment,
+  deletePlannedPayment,
+  getPlannedPayments,
+  markPlannedPaymentPaid,
+  updatePlannedPayment,
+  type PaymentDirection,
+  type PaymentRecurrence,
+  type PlannedPayment,
+  type PlannedPaymentInput,
+} from "../../api/plannedPayments";
 import { getCategories, getFinancialAccounts } from "../../api/referenceData";
 import { queryKeys } from "../../app/queryKeys";
-import { invalidateFinancialQueries, mutationInvalidations } from "../../app/invalidateQueries";
+import {
+  invalidateFinancialQueries,
+  mutationInvalidations,
+} from "../../app/invalidateQueries";
 import { localDateValue } from "../../lib/format";
-import { AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "../../components/ui/alert-dialog";
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "../../components/ui/alert-dialog";
 import { Button } from "../../components/ui/button";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "../../components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "../../components/ui/dialog";
 import { formatMinor } from "../../lib/format";
 import { RecurringPaymentIcon } from "./RecurringPaymentIcon";
 
-type FormValues = { title: string; amount: string; direction: PaymentDirection; dueDate: string; recurrence: PaymentRecurrence; isDebt: boolean; accountId: string; categoryId: string; notes: string; status: "pending" | "cancelled" };
-const control = "mt-1 h-10 w-full rounded-lg border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring";
-const blank = (): FormValues => ({ title: "", amount: "", direction: "expense", dueDate: localDateValue(), recurrence: "none", isDebt: false, accountId: "", categoryId: "", notes: "", status: "pending" });
-const fromPayment = (item: PlannedPayment): FormValues => ({ title: item.title, amount: String(item.amount_minor / 100), direction: item.direction, dueDate: item.due_date, recurrence: item.recurrence, isDebt: item.is_debt_payment, accountId: item.financial_account_id ? String(item.financial_account_id) : "", categoryId: item.category_id ? String(item.category_id) : "", notes: item.notes ?? "", status: item.status === "cancelled" ? "cancelled" : "pending" });
+type FormValues = {
+  title: string;
+  amount: string;
+  direction: PaymentDirection;
+  dueDate: string;
+  recurrence: PaymentRecurrence;
+  isDebt: boolean;
+  accountId: string;
+  categoryId: string;
+  notes: string;
+  status: "pending" | "cancelled";
+};
+const control =
+  "mt-1 h-10 w-full rounded-lg border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring";
+const pageSize = 4;
+const blank = (): FormValues => ({
+  title: "",
+  amount: "",
+  direction: "expense",
+  dueDate: localDateValue(),
+  recurrence: "none",
+  isDebt: false,
+  accountId: "",
+  categoryId: "",
+  notes: "",
+  status: "pending",
+});
+const fromPayment = (item: PlannedPayment): FormValues => ({
+  title: item.title,
+  amount: String(item.amount_minor / 100),
+  direction: item.direction,
+  dueDate: item.due_date,
+  recurrence: item.recurrence,
+  isDebt: item.is_debt_payment,
+  accountId: item.financial_account_id ? String(item.financial_account_id) : "",
+  categoryId: item.category_id ? String(item.category_id) : "",
+  notes: item.notes ?? "",
+  status: item.status === "cancelled" ? "cancelled" : "pending",
+});
 
-export function PlannedPaymentsView({ currency, locale, upcomingOnly = false }: { currency: string; locale: string; upcomingOnly?: boolean }) {
+export function PlannedPaymentsView({
+  currency,
+  locale,
+  upcomingOnly = false,
+}: {
+  currency: string;
+  locale: string;
+  upcomingOnly?: boolean;
+}) {
   const client = useQueryClient();
-  const payments = useQuery({ queryKey: queryKeys.plannedPayments, queryFn: ({ signal }) => getPlannedPayments(signal), select: (items) => upcomingOnly ? items.filter((item) => item.status === "pending" && item.due_date >= localDateValue()).sort((a, b) => a.due_date.localeCompare(b.due_date)) : items });
-  const accounts = useQuery({ queryKey: queryKeys.financialAccounts, queryFn: ({ signal }) => getFinancialAccounts(signal) });
-  const categories = useQuery({ queryKey: queryKeys.categories, queryFn: ({ signal }) => getCategories(signal) });
+  const [page, setPage] = useState(1);
+  const payments = useQuery({
+    queryKey: queryKeys.plannedPayments,
+    queryFn: ({ signal }) => getPlannedPayments(signal),
+    select: (items) =>
+      upcomingOnly
+        ? items
+            .filter(
+              (item) =>
+                item.status === "pending" && item.due_date >= localDateValue(),
+            )
+            .sort((a, b) => a.due_date.localeCompare(b.due_date) || a.id - b.id)
+        : items,
+  });
+  const accounts = useQuery({
+    queryKey: queryKeys.financialAccounts,
+    queryFn: ({ signal }) => getFinancialAccounts(signal),
+  });
+  const categories = useQuery({
+    queryKey: queryKeys.categories,
+    queryFn: ({ signal }) => getCategories(signal),
+  });
   const [editing, setEditing] = useState<PlannedPayment | "new" | null>(null);
   const [values, setValues] = useState<FormValues>(blank);
-  const [confirming, setConfirming] = useState<{ action: "delete" | "paid"; item: PlannedPayment } | null>(null);
+  const [confirming, setConfirming] = useState<{
+    action: "delete" | "paid";
+    item: PlannedPayment;
+  } | null>(null);
   const [error, setError] = useState("");
-  const refresh = () => invalidateFinancialQueries(client, mutationInvalidations.plannedPayments);
-  const save = useMutation({ mutationFn: (data: PlannedPaymentInput & { status?: "pending" | "cancelled" }) => editing === "new" ? createPlannedPayment(data) : updatePlannedPayment(editing!.id, data), onSuccess: async () => { await refresh(); setEditing(null); }, onError: (caught) => setError(caught instanceof Error ? caught.message : "The payment could not be saved.") });
-  const remove = useMutation({ mutationFn: deletePlannedPayment, onSuccess: async () => { await refresh(); setConfirming(null); } });
-  const markPaid = useMutation({ mutationFn: (item: PlannedPayment) => markPlannedPaymentPaid(item.id, item.due_date), onSuccess: async () => { await invalidateFinancialQueries(client, mutationInvalidations.markPaid); setConfirming(null); } });
+  const refresh = () =>
+    invalidateFinancialQueries(client, mutationInvalidations.plannedPayments);
+  const save = useMutation({
+    mutationFn: (
+      data: PlannedPaymentInput & { status?: "pending" | "cancelled" },
+    ) =>
+      editing === "new"
+        ? createPlannedPayment(data)
+        : updatePlannedPayment(editing!.id, data),
+    onSuccess: async () => {
+      await refresh();
+      setEditing(null);
+    },
+    onError: (caught) =>
+      setError(
+        caught instanceof Error
+          ? caught.message
+          : "The payment could not be saved.",
+      ),
+  });
+  const remove = useMutation({
+    mutationFn: deletePlannedPayment,
+    onSuccess: async () => {
+      await refresh();
+      setConfirming(null);
+    },
+  });
+  const markPaid = useMutation({
+    mutationFn: (item: PlannedPayment) =>
+      markPlannedPaymentPaid(item.id, item.due_date),
+    onSuccess: async () => {
+      await invalidateFinancialQueries(client, mutationInvalidations.markPaid);
+      setConfirming(null);
+    },
+  });
   const money = (minor: number) => formatMinor(minor, currency, locale, 2);
-  const open = (item: PlannedPayment | "new") => { setEditing(item); setValues(item === "new" ? blank() : fromPayment(item)); setError(""); };
-  const update = <K extends keyof FormValues>(key: K, value: FormValues[K]) => setValues((current) => ({ ...current, [key]: value, ...(key === "direction" ? { categoryId: "" } : {}) }));
-  const submit = (event: FormEvent) => { event.preventDefault(); setError(""); const amount = Math.round(Number(values.amount) * 100); if (!values.title.trim() || !Number.isInteger(amount) || amount <= 0) return setError("Enter a title and a positive amount."); save.mutate({ title: values.title.trim(), amount_minor: amount, direction: values.direction, due_date: values.dueDate, recurrence: values.recurrence, is_debt_payment: values.isDebt, notes: values.notes.trim() || null, financial_account_id: values.accountId ? Number(values.accountId) : null, category_id: values.categoryId ? Number(values.categoryId) : null, ...(editing === "new" ? {} : { status: values.status }) }); };
+  const open = (item: PlannedPayment | "new") => {
+    setEditing(item);
+    setValues(item === "new" ? blank() : fromPayment(item));
+    setError("");
+  };
+  const update = <K extends keyof FormValues>(key: K, value: FormValues[K]) =>
+    setValues((current) => ({
+      ...current,
+      [key]: value,
+      ...(key === "direction" ? { categoryId: "" } : {}),
+    }));
+  const submit = (event: FormEvent) => {
+    event.preventDefault();
+    setError("");
+    const amount = Math.round(Number(values.amount) * 100);
+    if (!values.title.trim() || !Number.isInteger(amount) || amount <= 0)
+      return setError("Enter a title and a positive amount.");
+    save.mutate({
+      title: values.title.trim(),
+      amount_minor: amount,
+      direction: values.direction,
+      due_date: values.dueDate,
+      recurrence: values.recurrence,
+      is_debt_payment: values.isDebt,
+      notes: values.notes.trim() || null,
+      financial_account_id: values.accountId ? Number(values.accountId) : null,
+      category_id: values.categoryId ? Number(values.categoryId) : null,
+      ...(editing === "new" ? {} : { status: values.status }),
+    });
+  };
   const activeAccounts = accounts.data?.filter((item) => item.is_active) ?? [];
-  const activeCategories = categories.data?.filter((item) => item.is_active && item.direction === values.direction) ?? [];
+  const activeCategories =
+    categories.data?.filter(
+      (item) => item.is_active && item.direction === values.direction,
+    ) ?? [];
   const formPending = accounts.isPending || categories.isPending;
+  const totalPages = upcomingOnly ? Math.max(1, Math.ceil((payments.data?.length ?? 0) / pageSize)) : 1;
+  const visiblePayments = upcomingOnly
+    ? payments.data?.slice((page - 1) * pageSize, page * pageSize) ?? []
+    : payments.data ?? [];
+  useEffect(() => {
+    setPage((current) => Math.min(current, totalPages));
+  }, [totalPages]);
 
-    return <section className="space-y-5"><div className="flex justify-end"><Button onClick={() => open("new")}>Create planned payment</Button></div><div className="rounded-xl border bg-card shadow-sm">{payments.isPending ? <State text="Loading planned payments…" /> : payments.isError ? <State error text={payments.error.message} /> : payments.data.length === 0 ? <State text="No planned payments yet." /> : <div className="divide-y">{payments.data.map((item) => <article className="p-5" key={item.id}><div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between"><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><div className="inline-flex items-center gap-1.5"><h2 className="font-semibold">{item.title}</h2><RecurringPaymentIcon recurrence={item.recurrence} /></div><span className="rounded-full bg-muted px-2 py-0.5 text-xs capitalize">{item.status}</span>{item.is_debt_payment && <span className="rounded-full border px-2 py-0.5 text-xs">Debt</span>}</div><p className="mt-1 text-sm text-muted-foreground">Due {item.due_date} · {item.direction} · {item.recurrence}</p><p className="mt-1 text-xs text-muted-foreground">{accounts.data?.find((entry) => entry.id === item.financial_account_id)?.name ?? "No account"} · {categories.data?.find((entry) => entry.id === item.category_id)?.name ?? "No category"}</p></div><div className="flex flex-wrap items-center gap-2"><p className="mr-2 font-semibold tabular-nums">{money(item.amount_minor)}</p>{item.status === "pending" && <Button size="sm" onClick={() => setConfirming({ action: "paid", item })}>Mark paid</Button>}<Button size="sm" variant="outline" onClick={() => open(item)}>Edit</Button><Button size="sm" variant="ghost" onClick={() => setConfirming({ action: "delete", item })}>Delete</Button></div></div></article>)}</div>}</div>
-    <Dialog open={editing !== null} onOpenChange={(isOpen) => { if (!isOpen) setEditing(null); }}><DialogContent className="max-h-[calc(100vh-2rem)] overflow-y-auto sm:max-w-xl"><DialogHeader><DialogTitle>{editing === "new" ? "Create planned payment" : "Edit planned payment"}</DialogTitle><DialogDescription>Schedule an expected income or expense.</DialogDescription></DialogHeader>{formPending ? <State text="Loading reference data…" /> : <form onSubmit={submit}><div className="grid gap-4 sm:grid-cols-2"><label className="text-sm font-medium sm:col-span-2">Title<input className={control} value={values.title} onChange={(event) => update("title", event.target.value)} /></label><label className="text-sm font-medium">Amount<input className={control} type="number" min="0.01" step="0.01" inputMode="decimal" value={values.amount} onChange={(event) => update("amount", event.target.value)} /></label><label className="text-sm font-medium">Due date<input className={control} type="date" value={values.dueDate} onChange={(event) => update("dueDate", event.target.value)} /></label><label className="text-sm font-medium">Direction<select className={control} value={values.direction} onChange={(event) => update("direction", event.target.value as PaymentDirection)}><option value="expense">Expense</option><option value="income">Income</option></select></label><label className="text-sm font-medium">Recurrence<select className={control} value={values.recurrence} onChange={(event) => update("recurrence", event.target.value as PaymentRecurrence)}><option value="none">None</option><option value="weekly">Weekly</option><option value="monthly">Monthly</option><option value="yearly">Yearly</option></select></label><label className="text-sm font-medium">Account <span className="font-normal text-muted-foreground">(optional)</span><select className={control} value={values.accountId} onChange={(event) => update("accountId", event.target.value)}><option value="">No account</option>{activeAccounts.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label><label className="text-sm font-medium">Category <span className="font-normal text-muted-foreground">(optional)</span><select className={control} value={values.categoryId} onChange={(event) => update("categoryId", event.target.value)}><option value="">No category</option>{activeCategories.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>{editing !== "new" && <label className="text-sm font-medium">Status<select className={control} value={values.status} onChange={(event) => update("status", event.target.value as "pending" | "cancelled")}><option value="pending">Pending</option><option value="cancelled">Cancelled</option></select></label>}<label className="flex items-center gap-2 self-end pb-2 text-sm font-medium"><input type="checkbox" checked={values.isDebt} onChange={(event) => update("isDebt", event.target.checked)} /> Debt payment</label><label className="text-sm font-medium sm:col-span-2">Notes<textarea className="mt-1 min-h-20 w-full rounded-lg border bg-background p-3 text-sm outline-none focus:ring-2 focus:ring-ring" value={values.notes} onChange={(event) => update("notes", event.target.value)} /></label></div>{error && <p className="mt-4 text-sm text-destructive" role="alert">{error}</p>}<DialogFooter className="mt-6"><Button disabled={save.isPending} type="submit">{save.isPending ? "Saving…" : "Save payment"}</Button></DialogFooter></form>}</DialogContent></Dialog>
-    <AlertDialog open={Boolean(confirming)} onOpenChange={(isOpen) => { if (!isOpen && !remove.isPending && !markPaid.isPending) setConfirming(null); }}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>{confirming?.action === "paid" ? "Mark payment paid?" : "Delete planned payment?"}</AlertDialogTitle><AlertDialogDescription>{confirming?.action === "paid" ? "This records the current occurrence and creates a ledger transaction only when both account and category are assigned." : "The schedule will be removed. Any transaction already created remains in the ledger."}</AlertDialogDescription></AlertDialogHeader>{(remove.isError || markPaid.isError) && <p className="text-sm text-destructive" role="alert">{(remove.error ?? markPaid.error) instanceof Error ? (remove.error ?? markPaid.error)?.message : "The action could not be completed."}</p>}<AlertDialogFooter><AlertDialogCancel disabled={remove.isPending || markPaid.isPending}>Cancel</AlertDialogCancel><Button disabled={remove.isPending || markPaid.isPending} variant={confirming?.action === "delete" ? "destructive" : "default"} onClick={() => confirming && (confirming.action === "delete" ? remove.mutate(confirming.item.id) : markPaid.mutate(confirming.item))}>{remove.isPending || markPaid.isPending ? "Working…" : confirming?.action === "paid" ? "Mark paid" : "Delete"}</Button></AlertDialogFooter></AlertDialogContent></AlertDialog>
-  </section>;
+  return (
+    <>
+      <section
+        aria-labelledby="upcoming-title"
+        className="overflow-hidden rounded-xl border bg-card shadow-sm"
+      >
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b p-4">
+          <div>
+            <h2 id="upcoming-title" className="font-semibold">
+              {upcomingOnly ? "Upcoming" : "Planned payments"}
+            </h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Expected income and expenses
+            </p>
+          </div>
+          <Button onClick={() => open("new")}>Create planned payment</Button>
+        </div>
+        {payments.isPending ? (
+          <State text="Loading planned payments…" />
+        ) : payments.isError ? (
+          <State error text={payments.error.message} />
+        ) : payments.data.length === 0 ? (
+          <State
+            text={
+              upcomingOnly
+                ? "No upcoming payments."
+                : "No planned payments yet."
+            }
+          />
+        ) : (
+          <div className="divide-y">
+            {visiblePayments.map((item) => (
+              <article className="p-5" key={item.id}>
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <div className="inline-flex items-center gap-1.5">
+                        <h3 className="font-semibold">{item.title}</h3>
+                        <RecurringPaymentIcon recurrence={item.recurrence} />
+                      </div>
+                      <span className="rounded-full bg-muted px-2 py-0.5 text-xs capitalize">
+                        {item.status}
+                      </span>
+                      {item.is_debt_payment && (
+                        <span className="rounded-full border px-2 py-0.5 text-xs">
+                          Debt
+                        </span>
+                      )}
+                    </div>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      Due {item.due_date} · {item.direction} · {item.recurrence}
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {accounts.data?.find(
+                        (entry) => entry.id === item.financial_account_id,
+                      )?.name ?? "No account"}{" "}
+                      ·{" "}
+                      {categories.data?.find(
+                        (entry) => entry.id === item.category_id,
+                      )?.name ?? "No category"}
+                    </p>
+                  </div>
+                  <div className="flex w-full min-w-0 flex-col items-end gap-3 sm:w-auto sm:self-stretch">
+                    <div
+                      aria-label="Payment status actions"
+                      className="flex flex-wrap items-center justify-end gap-2"
+                      role="group"
+                    >
+                      <p className="font-semibold tabular-nums">
+                        {money(item.amount_minor)}
+                      </p>
+                      {item.status === "pending" && (
+                        <Button
+                          size="sm"
+                          onClick={() =>
+                            setConfirming({ action: "paid", item })
+                          }
+                        >
+                          Mark paid
+                        </Button>
+                      )}
+                    </div>
+                    <div
+                      aria-label="Payment management actions"
+                      className="mt-auto flex flex-wrap items-center justify-end gap-2"
+                      role="group"
+                    >
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => open(item)}
+                      >
+                        Edit
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() =>
+                          setConfirming({ action: "delete", item })
+                        }
+                      >
+                        Delete
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </article>
+            ))}
+          </div>
+        )}
+        {upcomingOnly && totalPages > 1 && (
+          <nav aria-label="Upcoming pagination" className="flex items-center justify-between gap-3 border-t p-4">
+            <Button aria-label="Previous upcoming page" disabled={page === 1} onClick={() => setPage((current) => current - 1)} size="sm" variant="outline">
+              Previous
+            </Button>
+            <span className="text-sm text-muted-foreground">Page {page} of {totalPages}</span>
+            <Button aria-label="Next upcoming page" disabled={page === totalPages} onClick={() => setPage((current) => current + 1)} size="sm" variant="outline">
+              Next
+            </Button>
+          </nav>
+        )}
+      </section>
+      <Dialog
+        open={editing !== null}
+        onOpenChange={(isOpen) => {
+          if (!isOpen) setEditing(null);
+        }}
+      >
+        <DialogContent className="max-h-[calc(100vh-2rem)] overflow-y-auto sm:max-w-xl">
+          <DialogHeader>
+            <DialogTitle>
+              {editing === "new"
+                ? "Create planned payment"
+                : "Edit planned payment"}
+            </DialogTitle>
+            <DialogDescription>
+              Schedule an expected income or expense.
+            </DialogDescription>
+          </DialogHeader>
+          {formPending ? (
+            <State text="Loading reference data…" />
+          ) : (
+            <form onSubmit={submit}>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <label className="text-sm font-medium sm:col-span-2">
+                  Title
+                  <input
+                    className={control}
+                    value={values.title}
+                    onChange={(event) => update("title", event.target.value)}
+                  />
+                </label>
+                <label className="text-sm font-medium">
+                  Amount
+                  <input
+                    className={control}
+                    type="number"
+                    min="0.01"
+                    step="0.01"
+                    inputMode="decimal"
+                    value={values.amount}
+                    onChange={(event) => update("amount", event.target.value)}
+                  />
+                </label>
+                <label className="text-sm font-medium">
+                  Due date
+                  <input
+                    className={control}
+                    type="date"
+                    value={values.dueDate}
+                    onChange={(event) => update("dueDate", event.target.value)}
+                  />
+                </label>
+                <label className="text-sm font-medium">
+                  Direction
+                  <select
+                    className={control}
+                    value={values.direction}
+                    onChange={(event) =>
+                      update(
+                        "direction",
+                        event.target.value as PaymentDirection,
+                      )
+                    }
+                  >
+                    <option value="expense">Expense</option>
+                    <option value="income">Income</option>
+                  </select>
+                </label>
+                <label className="text-sm font-medium">
+                  Recurrence
+                  <select
+                    className={control}
+                    value={values.recurrence}
+                    onChange={(event) =>
+                      update(
+                        "recurrence",
+                        event.target.value as PaymentRecurrence,
+                      )
+                    }
+                  >
+                    <option value="none">None</option>
+                    <option value="weekly">Weekly</option>
+                    <option value="monthly">Monthly</option>
+                    <option value="yearly">Yearly</option>
+                  </select>
+                </label>
+                <label className="text-sm font-medium">
+                  Account{" "}
+                  <span className="font-normal text-muted-foreground">
+                    (optional)
+                  </span>
+                  <select
+                    className={control}
+                    value={values.accountId}
+                    onChange={(event) =>
+                      update("accountId", event.target.value)
+                    }
+                  >
+                    <option value="">No account</option>
+                    {activeAccounts.map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {item.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="text-sm font-medium">
+                  Category{" "}
+                  <span className="font-normal text-muted-foreground">
+                    (optional)
+                  </span>
+                  <select
+                    className={control}
+                    value={values.categoryId}
+                    onChange={(event) =>
+                      update("categoryId", event.target.value)
+                    }
+                  >
+                    <option value="">No category</option>
+                    {activeCategories.map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {item.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                {editing !== "new" && (
+                  <label className="text-sm font-medium">
+                    Status
+                    <select
+                      className={control}
+                      value={values.status}
+                      onChange={(event) =>
+                        update(
+                          "status",
+                          event.target.value as "pending" | "cancelled",
+                        )
+                      }
+                    >
+                      <option value="pending">Pending</option>
+                      <option value="cancelled">Cancelled</option>
+                    </select>
+                  </label>
+                )}
+                <label className="flex items-center gap-2 self-end pb-2 text-sm font-medium">
+                  <input
+                    type="checkbox"
+                    checked={values.isDebt}
+                    onChange={(event) => update("isDebt", event.target.checked)}
+                  />{" "}
+                  Debt payment
+                </label>
+                <label className="text-sm font-medium sm:col-span-2">
+                  Notes
+                  <textarea
+                    className="mt-1 min-h-20 w-full rounded-lg border bg-background p-3 text-sm outline-none focus:ring-2 focus:ring-ring"
+                    value={values.notes}
+                    onChange={(event) => update("notes", event.target.value)}
+                  />
+                </label>
+              </div>
+              {error && (
+                <p className="mt-4 text-sm text-destructive" role="alert">
+                  {error}
+                </p>
+              )}
+              <DialogFooter className="mt-6">
+                <Button disabled={save.isPending} type="submit">
+                  {save.isPending ? "Saving…" : "Save payment"}
+                </Button>
+              </DialogFooter>
+            </form>
+          )}
+        </DialogContent>
+      </Dialog>
+      <AlertDialog
+        open={Boolean(confirming)}
+        onOpenChange={(isOpen) => {
+          if (!isOpen && !remove.isPending && !markPaid.isPending)
+            setConfirming(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {confirming?.action === "paid"
+                ? "Mark payment paid?"
+                : "Delete planned payment?"}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {confirming?.action === "paid"
+                ? "This records the current occurrence and creates a ledger transaction only when both account and category are assigned."
+                : "The schedule will be removed. Any transaction already created remains in the ledger."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          {(remove.isError || markPaid.isError) && (
+            <p className="text-sm text-destructive" role="alert">
+              {(remove.error ?? markPaid.error) instanceof Error
+                ? (remove.error ?? markPaid.error)?.message
+                : "The action could not be completed."}
+            </p>
+          )}
+          <AlertDialogFooter>
+            <AlertDialogCancel
+              disabled={remove.isPending || markPaid.isPending}
+            >
+              Cancel
+            </AlertDialogCancel>
+            <Button
+              disabled={remove.isPending || markPaid.isPending}
+              variant={
+                confirming?.action === "delete" ? "destructive" : "default"
+              }
+              onClick={() =>
+                confirming &&
+                (confirming.action === "delete"
+                  ? remove.mutate(confirming.item.id)
+                  : markPaid.mutate(confirming.item))
+              }
+            >
+              {remove.isPending || markPaid.isPending
+                ? "Working…"
+                : confirming?.action === "paid"
+                  ? "Mark paid"
+                  : "Delete"}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
+  );
 }
-function State({ text, error }: { text: string; error?: boolean }) { return <div className={`p-12 text-center text-sm ${error ? "text-destructive" : "text-muted-foreground"}`} role={error ? "alert" : "status"}>{text}</div>; }
+function State({ text, error }: { text: string; error?: boolean }) {
+  return (
+    <div
+      className={`p-12 text-center text-sm ${error ? "text-destructive" : "text-muted-foreground"}`}
+      role={error ? "alert" : "status"}
+    >
+      {text}
+    </div>
+  );
+}

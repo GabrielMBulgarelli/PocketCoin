@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   canonicalizeWorkspaceHash,
+  primaryRoutes,
   routeMetadata,
   routeHref,
   scopeToApiParams,
@@ -59,7 +60,7 @@ describe("workspace route state", () => {
   });
 
   it("makes Planning globally effective without discarding requested account", () => {
-    const result = canonicalizeWorkspaceHash("#/budgets?account=4&month=2026-07&planning=upcoming", [
+    const result = canonicalizeWorkspaceHash("#/dashboard?account=4&month=2026-07&analysis=planning", [
       { id: 4, is_active: true },
     ]);
     expect(result.state.scope).toEqual({
@@ -67,7 +68,7 @@ describe("workspace route state", () => {
       effective: { kind: "all" },
       reason: "planning-is-global",
     });
-    expect(result.hash).toBe("#/budgets?account=4&month=2026-07&planning=upcoming");
+    expect(result.hash).toBe("#/dashboard?account=4&month=2026-07&analysis=planning");
   });
 
   it("normalizes default and unknown modes", () => {
@@ -75,33 +76,68 @@ describe("workspace route state", () => {
     expect(defaultOverview.state.analysis).toBe("cash-flow");
     expect(defaultOverview.hash).toBe("#/dashboard");
     expect(canonicalizeWorkspaceHash("#/dashboard?analysis=forecast").hash).toBe("#/dashboard?analysis=forecast");
+    expect(canonicalizeWorkspaceHash("#/dashboard?analysis=planning").hash).toBe("#/dashboard?analysis=planning");
     expect(canonicalizeWorkspaceHash("#/dashboard?analysis=nope&activity=all").hash).toBe("#/dashboard");
-    expect(canonicalizeWorkspaceHash("#/budgets?planning=budgets").hash).toBe("#/budgets");
     expect(canonicalizeWorkspaceHash("#/reports?metric=nope").hash).toBe("#/reports");
   });
 
-  it("replaces planned-payments with Planning Upcoming and retains only supported state", () => {
+  it("owns activity state across all primary routes and omits the default", () => {
+    expect(canonicalizeWorkspaceHash("#/dashboard?activity=income").hash).toBe("#/dashboard?activity=income");
+    expect(canonicalizeWorkspaceHash("#/transactions?activity=transfers").hash).toBe("#/transactions?activity=transfers");
+    expect(canonicalizeWorkspaceHash("#/reports?activity=income").hash).toBe("#/reports?activity=income");
+    expect(canonicalizeWorkspaceHash("#/transactions?activity=expenses").hash).toBe("#/transactions");
+    expect(canonicalizeWorkspaceHash("#/reports?activity=unknown").hash).toBe("#/reports");
+  });
+
+  it("redirects retired Overview analyses to their relevant destinations", () => {
+    const spending = canonicalizeWorkspaceHash(
+      "#/dashboard?account=3&from=2026-07-01&to=2026-07-31&category=4&tag=5&month=2026-07&analysis=spending",
+    );
+    expect(spending.state.analysis).toBe("planning");
+    expect(spending.hash).toBe(
+      "#/dashboard?account=3&from=2026-07-01&to=2026-07-31&category=4&tag=5&month=2026-07&analysis=planning",
+    );
+
+    const debt = canonicalizeWorkspaceHash(
+      "#/dashboard?account=3&from=2026-07-01&to=2026-07-31&analysis=debt&activity=income",
+    );
+    expect(debt.state.analysis).toBe("cash-flow");
+    expect(debt.hash).toBe(
+      "#/dashboard?account=3&from=2026-07-01&to=2026-07-31&activity=income",
+    );
+  });
+
+  it("replaces legacy planning routes with Overview Planning and retains compatible state", () => {
     const result = canonicalizeWorkspaceHash(
       "#/planned-payments?financial_account_id=8&month=2026-11&from=2026-01-01&q=rent&page=2&unknown=yes",
     );
-    expect(result.state.path).toBe("/budgets");
-    expect(result.state.planning).toBe("upcoming");
-    expect(result.hash).toBe("#/budgets?account=8&month=2026-11&planning=upcoming");
+    expect(result.state.path).toBe("/dashboard");
+    expect(result.state.analysis).toBe("planning");
+    expect(result.hash).toBe("#/dashboard?account=8&month=2026-11&analysis=planning");
+    expect(canonicalizeWorkspaceHash("#/budgets?account=general&month=2026-08").hash)
+      .toBe("#/dashboard?account=general&month=2026-08&analysis=planning");
   });
 
   it("retains only parameters supported by each primary destination", () => {
     const state = canonicalizeWorkspaceHash(
-      "#/reports?account=3&from=2026-07-01&to=2026-07-21&category=4&tag=5&metric=income",
+      "#/reports?account=3&from=2026-07-01&to=2026-07-21&category=4&tag=5&activity=income&metric=income",
     ).state;
 
     expect(routeHref("/dashboard", state)).toBe(
-      "#/dashboard?account=3&from=2026-07-01&to=2026-07-21&category=4&tag=5",
+      "#/dashboard?account=3&from=2026-07-01&to=2026-07-21&category=4&tag=5&activity=income",
     );
-    expect(routeHref("/transactions", state)).toBe("#/transactions?account=3");
-    expect(routeHref("/budgets", { ...state, month: "2026-07" })).toBe("#/budgets?account=3&month=2026-07");
+    expect(routeHref("/transactions", state)).toBe("#/transactions?account=3&activity=income");
     expect(routeHref("/reports", state)).toBe(
-      "#/reports?account=3&from=2026-07-01&to=2026-07-21&category=4&tag=5&metric=income",
+      "#/reports?account=3&from=2026-07-01&to=2026-07-21&category=4&tag=5&activity=income&metric=income",
     );
+  });
+
+  it("exposes only Overview, Transactions, and Reports as primary routes", () => {
+    expect(primaryRoutes.map((route) => route.primaryLabel)).toEqual([
+      "Overview",
+      "Transactions",
+      "Reports",
+    ]);
   });
 
   it("converts account scope only at the API boundary", () => {
@@ -112,18 +148,18 @@ describe("workspace route state", () => {
 
   it("preserves valid date and month values and removes malformed ones", () => {
     const valid = canonicalizeWorkspaceHash(
-      "#/dashboard?from=2026-02-01&to=2026-02-28&category=2&tag=3&analysis=debt&activity=income",
+      "#/dashboard?from=2026-02-01&to=2026-02-28&category=2&tag=3&analysis=planning&activity=income",
     );
     expect(valid.state).toEqual(expect.objectContaining({
       from: "2026-02-01",
       to: "2026-02-28",
       categoryId: 2,
       tagId: 3,
-      analysis: "debt",
+      analysis: "planning",
       activity: "income",
     } satisfies Partial<WorkspaceRouteState>));
 
-    expect(canonicalizeWorkspaceHash("#/budgets?month=2026-13").hash).toBe("#/budgets");
+    expect(canonicalizeWorkspaceHash("#/budgets?month=2026-13").hash).toBe("#/dashboard?analysis=planning");
     expect(canonicalizeWorkspaceHash("#/dashboard?from=2026-02-30&to=nope").hash).toBe("#/dashboard");
   });
 });

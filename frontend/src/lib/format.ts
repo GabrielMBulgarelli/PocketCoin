@@ -6,3 +6,7 @@ const padCalendarPart = (value: number) => String(value).padStart(2, "0");
 export const localDateValue = (date = new Date()) => `${date.getFullYear()}-${padCalendarPart(date.getMonth() + 1)}-${padCalendarPart(date.getDate())}`;
 export const localMonthValue = (date = new Date()) => `${date.getFullYear()}-${padCalendarPart(date.getMonth() + 1)}`;
 export const monthStartValue = (dateValue: string) => `${dateValue.slice(0, 7)}-01`;
+export const monthEndValue = (monthValue: string) => {
+  const [year, month] = monthValue.split("-").map(Number);
+  return `${monthValue}-${padCalendarPart(new Date(year, month, 0).getDate())}`;
+};

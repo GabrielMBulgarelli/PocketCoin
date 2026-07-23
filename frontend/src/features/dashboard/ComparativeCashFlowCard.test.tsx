@@ -14,7 +14,13 @@ vi.mock("recharts", () => ({
   ResponsiveContainer: ({ children }: { children: ReactNode }) => <>{children}</>,
   Tooltip: () => null,
   XAxis: () => null,
-  YAxis: () => null,
+  YAxis: ({ domain, ticks }: { domain: number[]; ticks: number[] }) => (
+    <div
+      data-domain={domain.join(",")}
+      data-testid="comparative-y-axis"
+      data-ticks={ticks.join(",")}
+    />
+  ),
 }));
 
 const data = [
@@ -62,6 +68,53 @@ describe("ComparativeCashFlowCard", () => {
 
     expect(screen.getByText("Jan 1 – Mar 1, 2026")).toBeInTheDocument();
     expect(screen.queryByRole("combobox", { name: "Comparison period" })).not.toBeInTheDocument();
+  });
+
+  it("places only the wrapping-safe net summary in the right header action", () => {
+    render(
+      <ComparativeCashFlowCard
+        data={data}
+        formatCompactMinor={String}
+        formatMinor={() => "A very long formatted currency value"}
+        period="Jan 1 – Mar 1, 2026"
+        shortDate={(value) => value}
+      />,
+    );
+
+    const netLabel = screen.getByText("Net cash flow");
+    const netSummary = netLabel.parentElement;
+    const headerAction = netLabel.closest(".float-right");
+    const legend = screen.getByRole("list", { name: "Comparative chart legend" });
+
+    expect(headerAction).not.toBeNull();
+    expect(headerAction).toContainElement(netSummary);
+    expect(headerAction).not.toContainElement(legend);
+    expect(netSummary).toHaveClass("max-w-48", "break-words", "text-right");
+  });
+
+  it("does not force its own desktop grid span", () => {
+    render(
+      <ComparativeCashFlowCard
+        data={data}
+        formatCompactMinor={String}
+        formatMinor={String}
+        period="Jan 1 – Mar 1, 2026"
+        shortDate={(value) => value}
+      />,
+    );
+
+    const region = screen.getByRole("region", { name: "Comparative Bar Chart" });
+    expect(region).not.toHaveClass("xl:col-span-2");
+    expect(region).toHaveClass("h-full");
+
+    const yAxis = screen.getByTestId("comparative-y-axis");
+    expect(yAxis).toHaveAttribute("data-domain", "-1000000,1000000");
+    expect(yAxis).toHaveAttribute(
+      "data-ticks",
+      "-1000000,-500000,0,500000,1000000",
+    );
+    expect(yAxis.closest(".h-72")).toBeNull();
+    expect(yAxis.closest(".h-64")).not.toBeNull();
   });
 
   it("rounds the outward end of the downward expense bars", () => {

@@ -57,7 +57,7 @@ describe("comparative cash-flow data", () => {
     ]);
   });
 
-  it("calculates totals and a balanced, rounded chart extent", () => {
+  it("calculates totals and rounds the balanced, padded extent to 10,000 whole units", () => {
     const rows = comparativeCashFlowRows([
       { date: "2026-07-01", income_minor: 570_000, expense_minor: 420_000 },
       { date: "2026-07-02", income_minor: 0, expense_minor: 90_000 },
@@ -68,7 +68,26 @@ describe("comparative cash-flow data", () => {
       expense_minor: 510_000,
       net_minor: 60_000,
     });
-    expect(symmetricCashFlowExtent(rows)).toBe(600_000);
+    expect(symmetricCashFlowExtent(rows)).toBe(1_000_000);
     expect(symmetricCashFlowExtent([])).toBe(1);
+  });
+
+  it("derives the padded extent from an expense-dominant dataset", () => {
+    const rows = comparativeCashFlowRows([
+      { date: "2026-07-01", income_minor: 400_000, expense_minor: 800_000 },
+      { date: "2026-07-02", income_minor: 500_000, expense_minor: 700_000 },
+    ]);
+
+    expect(symmetricCashFlowExtent(rows)).toBe(1_000_000);
+  });
+
+  it("keeps every half-extent tick on a 5,000 whole-unit increment", () => {
+    const rows = comparativeCashFlowRows([
+      { date: "2026-07-23", income_minor: 11_200_000, expense_minor: 4_200_000 },
+    ]);
+    const extent = symmetricCashFlowExtent(rows);
+
+    expect(extent).toBe(12_000_000);
+    expect([extent / 2, extent].every((value) => value / 100 % 5_000 === 0)).toBe(true);
   });
 });

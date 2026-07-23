@@ -81,7 +81,7 @@ export function useAnalyticsViewState(route: AnalyticsRoute, defaultMetric: Comp
   }, [filters, metric]);
 
   useEffect(() => {
-    if (!updateRoute || routeValue?.path !== route) return;
+    if (!updateRoute || routeValue?.path !== route || (route === "/dashboard" && routeValue.analysis === "planning")) return;
     updateRoute({
       from: filters.start_date,
       to: filters.end_date,
@@ -89,7 +89,7 @@ export function useAnalyticsViewState(route: AnalyticsRoute, defaultMetric: Comp
       tagId: filters.tag_id,
       metric: route === "/reports" ? metric : routeValue.metric,
     }, { replace: true });
-  }, [filters, metric, route, routeValue?.metric, routeValue?.path, updateRoute]);
+  }, [filters, metric, route, routeValue?.analysis, routeValue?.metric, routeValue?.path, updateRoute]);
 
   useEffect(() => {
     if (!hasWorkspace || routeValue?.path !== route) return;

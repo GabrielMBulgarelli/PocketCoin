@@ -8,10 +8,9 @@ export type RoutePath =
   | "/import"
   | "/settings";
 
-export type PrimaryRoutePath = "/dashboard" | "/transactions" | "/budgets" | "/reports";
-export type AnalysisMode = "forecast" | "cash-flow" | "spending" | "debt";
+export type PrimaryRoutePath = "/dashboard" | "/transactions" | "/reports";
+export type AnalysisMode = "forecast" | "cash-flow" | "planning";
 export type ActivityMode = "income" | "expenses" | "transfers";
-export type PlanningMode = "budgets" | "upcoming";
 export type ReportMetric = "cash_flow" | "expenses" | "income";
 
 export type AccountScope =
@@ -36,7 +35,6 @@ export type WorkspaceRouteState = {
   month?: string;
   analysis: AnalysisMode;
   activity: ActivityMode;
-  planning: PlanningMode;
   metric: ReportMetric;
   settingsSection?: "data-safety";
   referenceAction?: "category" | "tag";
@@ -56,7 +54,7 @@ export type RouteMetadata = {
 export const routeMetadata: Record<RoutePath, RouteMetadata> = {
   "/dashboard": { path: "/dashboard", title: "Overview", primaryLabel: "Overview", primary: true, accountScope: true, rightRail: "financial" },
   "/transactions": { path: "/transactions", title: "Transactions", primaryLabel: "Transactions", primary: true, accountScope: true, rightRail: "financial" },
-  "/budgets": { path: "/budgets", title: "Planning", primaryLabel: "Planning", primary: true, accountScope: true, rightRail: "financial" },
+  "/budgets": { path: "/budgets", title: "Planning", primary: false, accountScope: true, rightRail: "financial" },
   "/reports": { path: "/reports", title: "Reports", primaryLabel: "Reports", primary: true, accountScope: true, rightRail: "financial" },
   "/financial-accounts": { path: "/financial-accounts", title: "Financial accounts", primary: false, accountScope: false, rightRail: "accounts" },
   "/categories": { path: "/categories", title: "Categories & tags", primary: false, accountScope: false, rightRail: "references" },
@@ -64,16 +62,15 @@ export const routeMetadata: Record<RoutePath, RouteMetadata> = {
   "/settings": { path: "/settings", title: "Settings", primary: false, accountScope: false, rightRail: "settings" },
 };
 
-export const primaryRoutes = (["/dashboard", "/transactions", "/budgets", "/reports"] as const)
+export const primaryRoutes = (["/dashboard", "/transactions", "/reports"] as const)
   .map((path) => routeMetadata[path]);
 
 export const secondaryRoutes = (["/financial-accounts", "/categories", "/import", "/settings"] as const)
   .map((path) => routeMetadata[path]);
 
 const validRoutes = new Set<RoutePath>(Object.keys(routeMetadata) as RoutePath[]);
-const analysisModes = new Set<AnalysisMode>(["forecast", "cash-flow", "spending", "debt"]);
+const analysisModes = new Set<AnalysisMode>(["forecast", "cash-flow", "planning"]);
 const activityModes = new Set<ActivityMode>(["income", "expenses", "transfers"]);
-const planningModes = new Set<PlanningMode>(["budgets", "upcoming"]);
 const reportMetrics = new Set<ReportMetric>(["cash_flow", "expenses", "income"]);
 
 function positiveInteger(value: string | null): number | undefined {
@@ -113,8 +110,9 @@ export function resolveEffectiveScope(
   requested: AccountScope,
   path: RoutePath,
   accounts?: AccountAvailability[],
+  analysis?: AnalysisMode,
 ): EffectiveWorkspaceScope {
-  if (path === "/budgets" && requested.kind !== "all") {
+  if (path === "/dashboard" && analysis === "planning" && requested.kind !== "all") {
     return { requested, effective: { kind: "all" }, reason: "planning-is-global" };
   }
   if (requested.kind === "account" && accounts && !accounts.some((account) => account.id === requested.accountId)) {
@@ -139,13 +137,13 @@ function serializeState(path: RoutePath, state: WorkspaceRouteState): string {
     if (state.tagId) params.set("tag", String(state.tagId));
   }
   if (path === "/dashboard") {
+    if (state.analysis === "planning" && state.month) params.set("month", state.month);
     if (state.analysis !== "cash-flow") params.set("analysis", state.analysis);
-    if (state.activity !== "expenses") params.set("activity", state.activity);
   }
-  if (path === "/budgets") {
-    if (state.month) params.set("month", state.month);
-    if (state.planning !== "budgets") params.set("planning", state.planning);
-  }
+  if (
+    (path === "/dashboard" || path === "/transactions" || path === "/reports")
+    && state.activity !== "expenses"
+  ) params.set("activity", state.activity);
   if (path === "/reports" && state.metric !== "cash_flow") params.set("metric", state.metric);
   if (path === "/settings" && state.settingsSection) params.set("section", state.settingsSection);
   if (path === "/categories" && state.referenceAction) params.set("add", state.referenceAction);
@@ -160,26 +158,31 @@ export function routeHref(path: RoutePath, source: WorkspaceRouteState): string 
 export function canonicalizeWorkspaceHash(rawHash: string, accounts?: AccountAvailability[]) {
   const raw = rawHash.startsWith("#") ? rawHash.slice(1) : rawHash;
   const [rawPath = "", query = ""] = raw.split("?", 2);
-  const compatibility = rawPath === "/planned-payments";
+  const compatibility = rawPath === "/planned-payments" || rawPath === "/budgets";
   const path: RoutePath = compatibility
-    ? "/budgets"
+    ? "/dashboard"
     : validRoutes.has(rawPath as RoutePath)
       ? (rawPath as RoutePath)
       : "/dashboard";
   const params = new URLSearchParams(query);
   const account = accountFromParams(params);
+  const requestedAnalysis = params.get("analysis");
+  const analysis = compatibility || requestedAnalysis === "spending"
+    ? "planning"
+    : requestedAnalysis === "debt"
+      ? "cash-flow"
+      : enumValue(requestedAnalysis, analysisModes, "cash-flow");
   const state: WorkspaceRouteState = {
     path,
     account,
-    scope: resolveEffectiveScope(account, path, accounts),
-    from: validDate(params.get("from")) ? params.get("from")! : undefined,
-    to: validDate(params.get("to")) ? params.get("to")! : undefined,
-    categoryId: positiveInteger(params.get("category")),
-    tagId: positiveInteger(params.get("tag")),
+    scope: resolveEffectiveScope(account, path, accounts, analysis),
+    from: !compatibility && validDate(params.get("from")) ? params.get("from")! : undefined,
+    to: !compatibility && validDate(params.get("to")) ? params.get("to")! : undefined,
+    categoryId: compatibility ? undefined : positiveInteger(params.get("category")),
+    tagId: compatibility ? undefined : positiveInteger(params.get("tag")),
     month: validMonth(params.get("month")) ? params.get("month")! : undefined,
-    analysis: enumValue(params.get("analysis"), analysisModes, "cash-flow"),
+    analysis,
     activity: enumValue(params.get("activity"), activityModes, "expenses"),
-    planning: compatibility ? "upcoming" : enumValue(params.get("planning"), planningModes, "budgets"),
     metric: enumValue(params.get("metric"), reportMetrics, "cash_flow"),
     settingsSection: params.get("section") === "data-safety" ? "data-safety" : undefined,
     referenceAction: params.get("add") === "category" || params.get("add") === "tag" ? params.get("add") as "category" | "tag" : undefined,
