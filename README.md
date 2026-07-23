@@ -1,15 +1,6 @@
-```text
-██████╗  ██████╗  ██████╗██╗  ██╗███████╗████████╗   ██████╗ ██████╗ ██╗███╗   ██╗
-██╔══██╗██╔═══██╗██╔════╝██║ ██╔╝██╔════╝╚══██╔══╝  ██╔════╝██╔═══██╗██║████╗  ██║
-██████╔╝██║   ██║██║     █████╔╝ █████╗     ██║     ██║     ██║   ██║██║██╔██╗ ██║
-██╔═══╝ ██║   ██║██║     ██╔═██╗ ██╔══╝     ██║     ██║     ██║   ██║██║██║╚██╗██║
-██║     ╚██████╔╝╚██████╗██║  ██╗███████╗   ██║     ╚██████╗╚██████╔╝██║██║ ╚████║
-╚═╝      ╚═════╝  ╚═════╝╚═╝  ╚═╝╚══════╝   ╚═╝      ╚═════╝ ╚═════╝ ╚═╝╚═╝  ╚═══╝
-```
-
 # PocketCoin
 
-PocketCoin is a local-first personal budgeting application for one person. It combines account tracking, transaction management, planning, and financial analysis in a responsive web workspace, with no login or cloud service required.
+PocketCoin is a local-first personal budgeting application. It combines account tracking, transaction management, planning, and financial analysis in a responsive web workspace, with no login or cloud service required.
 
 ![PocketCoin Overview showing cash flow, period comparison, recent activity, and account summaries](assets/pocketcoin-overview.jpg)
 
