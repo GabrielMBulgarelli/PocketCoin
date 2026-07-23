@@ -17,7 +17,8 @@ const budgets = [{
   limit_minor: 100_000,
   spent_minor: 20_000,
   remaining_minor: 80_000,
-  progress_ratio: 0.2,
+  percentage_used: 0.2,
+  over_budget: false,
   created_at: "2026-07-01T00:00:00Z",
   updated_at: "2026-07-01T00:00:00Z",
 }];
@@ -34,6 +35,13 @@ function renderView() {
 }
 
 describe("BudgetsView", () => {
+  it("leaves the remaining portion of a budget bar unfilled", async () => {
+    renderView();
+
+    const progress = await screen.findByLabelText("20 percent used");
+    expect(progress.firstElementChild).toHaveStyle({ width: "20%" });
+  });
+
   it("offers another unused expense category in the same month", async () => {
     renderView();
 

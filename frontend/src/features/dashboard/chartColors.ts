@@ -1,6 +1,7 @@
 export const chartColors = {
   income: "var(--color-chart-income)",
   expense: "var(--color-chart-expense)",
+  cashFlowExpense: "var(--color-chart-cash-flow-expense)",
   current: "var(--color-chart-current)",
   previous: "var(--color-chart-previous)",
   priorYear: "var(--color-chart-prior-year)",

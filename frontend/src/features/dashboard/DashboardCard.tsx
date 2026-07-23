@@ -27,19 +27,17 @@ export function DashboardCard({
       aria-labelledby={titleId}
       className={cn("min-w-0 rounded-xl border bg-card p-5 shadow-sm", className)}
     >
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h2 id={titleId} className="text-base font-semibold tracking-tight text-foreground text-balance">
-            {title}
-          </h2>
-          {description ? (
-            <div className="mt-1 text-sm text-muted-foreground text-pretty">{description}</div>
-          ) : null}
-          {period ? <div className="mt-1">{period}</div> : null}
-        </div>
-        {actions ? <div className="min-w-0 shrink-0">{actions}</div> : null}
+      <div className="flow-root">
+        {actions ? <div className="float-right mb-2 ml-3 min-w-0">{actions}</div> : null}
+        <h2 id={titleId} className="min-w-0 text-base font-semibold tracking-tight text-foreground text-balance">
+          {title}
+        </h2>
+        {description ? (
+          <div className="text-sm text-muted-foreground text-pretty">{description}</div>
+        ) : null}
+        {period ? <div>{period}</div> : null}
       </div>
-      <div className={cn("mt-5", contentClassName)}>{children}</div>
+      <div className={cn("clear-both mt-5", contentClassName)}>{children}</div>
     </section>
   );
 }

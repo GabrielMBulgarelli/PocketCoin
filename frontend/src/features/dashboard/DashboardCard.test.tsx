@@ -25,5 +25,14 @@ describe("DashboardCard", () => {
     expect(screen.getByText("Compare financial periods")).toBeInTheDocument();
     expect(screen.getByText("Last 30 days")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Change metric" })).toBeInTheDocument();
+
+    const actionWrapper = screen.getByRole("button", { name: "Change metric" }).parentElement;
+    const header = actionWrapper?.parentElement;
+    const content = screen.getByText("Chart");
+
+    expect(header).toHaveClass("flow-root");
+    expect(actionWrapper).toHaveClass("float-right", "mb-2", "ml-3");
+    expect(screen.getByText("Compare financial periods")).not.toHaveClass("col-span-2");
+    expect(content).toHaveClass("clear-both");
   });
 });

@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 
-import { getDashboardEndpoint, type BalanceForecast, type CashFlowTable, type CategoryPoint, type ComparisonMetric, type ComparisonPoint, type CreditAccountUtilization, type CreditUtilization, type DashboardFilters, type DebtToIncome, type RecentActivity, type RecurringDebts } from "../../api/dashboard";
+import { getDashboardEndpoint, type BalanceForecast, type CashFlowPoint, type CashFlowTable, type CategoryPoint, type ComparisonMetric, type ComparisonPoint, type CreditAccountUtilization, type CreditUtilization, type DashboardFilters, type DebtToIncome, type RecentActivity, type RecurringDebts } from "../../api/dashboard";
 import { getCategories, getFinancialAccounts, getTags } from "../../api/referenceData";
 import { queryKeys } from "../../app/queryKeys";
 import { useOptionalWorkspaceRoute } from "../../app/WorkspaceRouteContext";
@@ -10,6 +10,7 @@ import { formatMinor, formatShortDate, monthStartValue } from "../../lib/format"
 import { BudgetProgressCard } from "../budgets/BudgetProgressCard";
 import { BalanceForecastCard } from "./BalanceForecastCard";
 import { CategorySpendingCard, DashboardFiltersControl, ExpenseStructureCard, PeriodComparisonCard } from "./DashboardCards";
+import { ComparativeCashFlowCard } from "./ComparativeCashFlowCard";
 import { CashFlowSummaryCard } from "./CashFlowSummaryCard";
 import { CreditDebtSection } from "./CreditDebtSection";
 import { DashboardCard } from "./DashboardCard";
@@ -61,6 +62,7 @@ export function DashboardView({ currency, locale }: { currency: string; locale: 
   const categoryCatalog = { data: categories.data, isPending: categories.isPending, isError: categories.isError, retry: () => void categories.refetch() };
   const tagCatalog = { data: tags.data, isPending: tags.isPending, isError: tags.isError, retry: () => void tags.refetch() };
   const forecast = useDashboardSection<BalanceForecast>("balance-forecast", effectiveFilters, validRange && mode === "forecast");
+  const cashFlow = useDashboardSection<CashFlowPoint[]>("cash-flow", effectiveFilters, validRange && mode === "cash-flow");
   const cashTable = useDashboardSection<CashFlowTable>("cash-flow-table", effectiveFilters, validRange && mode === "cash-flow");
   const comparison = useDashboardSection<ComparisonPoint[]>("period-comparison", effectiveFilters, validRange && mode === "cash-flow", { metric: effectiveMetric });
   const categorySpending = useDashboardSection<CategoryPoint[]>("category-spending", effectiveFilters, validRange && mode === "spending");
@@ -71,7 +73,15 @@ export function DashboardView({ currency, locale }: { currency: string; locale: 
   const recurringDebts = useDashboardSection<RecurringDebts>("recurring-debts", effectiveFilters, validRange && mode === "debt");
   const debtToIncome = useDashboardSection<DebtToIncome>("debt-to-income", effectiveFilters, validRange && mode === "debt");
   const money = (value: number) => formatMinor(value, currency, locale);
+  const compactMoney = (value: number) => new Intl.NumberFormat(locale, {
+    style: "currency",
+    currency,
+    currencyDisplay: "narrowSymbol",
+    notation: "compact",
+    maximumFractionDigits: 1,
+  }).format(value / 100);
   const shortDate = (value: string) => formatShortDate(value, locale);
+  const monthLabel = (value: string) => new Intl.DateTimeFormat(locale, { month: "short" }).format(new Date(`${value}T00:00:00`));
   const period = validRange ? `${shortDate(filters.start_date)} – ${shortDate(filters.end_date)}` : "Adjust the date filters";
   const debtErrors = [credit, creditAccounts, recurringDebts, debtToIncome].filter((item) => item.isError).map((item) => item.error?.message ?? "A debt metric could not be loaded.");
   const activityRows = recent.data ?? [];
@@ -91,9 +101,21 @@ export function DashboardView({ currency, locale }: { currency: string; locale: 
           {mode === "forecast" && (forecast.isPending || forecast.isError ? <SectionState title="Balance forecast" period={period} query={forecast} /> : <BalanceForecastCard forecast={forecast.data} formatMinor={money} shortDate={shortDate} />)}
           {mode === "cash-flow" && (cashTable.isPending || cashTable.isError ? <SectionState title="Cash flow" period={period} query={cashTable} /> : <CashFlowSummaryCard data={cashTable.data} period={<PeriodLabel kind="range" startDate={filters.start_date} endDate={filters.end_date} locale={locale} />} formatMinor={money} />)}
           {mode === "cash-flow" && (comparison.isPending || comparison.isError ? <SectionState title="Period comparison" period={period} query={comparison} /> : <PeriodComparisonCard data={comparison.data} context={`${comparisonMetricLabels[metric]} compared with previous period and prior year`} emptyLabel="No comparable period yet." formatMinor={money} shortDate={shortDate} period={<PeriodLabel kind="range" startDate={filters.start_date} endDate={filters.end_date} locale={locale} />} actions={<MetricSelector value={metric} onChange={setMetric} />} />)}
+          {mode === "cash-flow" && <div className="min-w-0 xl:col-span-2">
+            {cashFlow.isPending || cashFlow.isError
+              ? <SectionState title="Comparative Bar Chart" period={period} query={cashFlow} />
+              : <ComparativeCashFlowCard
+                data={cashFlow.data}
+                formatCompactMinor={compactMoney}
+                formatMinor={money}
+                monthLabel={monthLabel}
+                period={<PeriodLabel kind="range" startDate={filters.start_date} endDate={filters.end_date} locale={locale} />}
+                shortDate={shortDate}
+              />}
+          </div>}
           {mode === "spending" && <BudgetProgressCard month={monthStartValue(filters.end_date)} currency={currency} locale={locale} />}
           {mode === "spending" && (categorySpending.isPending || categorySpending.isError ? <SectionState title="Category spending" period={period} query={categorySpending} /> : <CategorySpendingCard data={categorySpending.data} context={`${period} · highest expense categories`} formatMinor={money} />)}
-          {mode === "spending" && (structure.isPending || structure.isError ? <SectionState title="Expense structure" period={period} query={structure} /> : <ExpenseStructureCard data={structure.data} formatMinor={money} />)}
+          {mode === "spending" && <div className="min-w-0 xl:col-span-1">{structure.isPending || structure.isError ? <SectionState title="Expense structure" period={period} query={structure} /> : <ExpenseStructureCard data={structure.data} formatMinor={money} reportHref={workspace?.href("/reports") ?? "#/reports"} />}</div>}
         </div>
         {mode === "debt" && <CreditDebtSection overall={credit.data} accounts={creditAccounts.data} debts={recurringDebts.data} dti={debtToIncome.data} pending={credit.isPending || creditAccounts.isPending || recurringDebts.isPending || debtToIncome.isPending} errors={debtErrors} formatMinor={money} />}
         <DashboardCard title="Recent activity" description="Latest eight records" period={<PeriodLabel kind="range" startDate={filters.start_date} endDate={filters.end_date} locale={locale} />} actions={<nav aria-label="Recent activity kind" className="flex flex-wrap gap-1">{(["income", "expenses", "transfers"] as const).map((item) => <Button aria-current={activity === item ? "page" : undefined} key={item} onClick={() => workspace?.update({ activity: item })} size="sm" variant={activity === item ? "default" : "ghost"}>{item[0].toUpperCase() + item.slice(1)}</Button>)}</nav>}>

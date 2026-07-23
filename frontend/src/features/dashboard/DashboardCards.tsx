@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Bar, BarChart, CartesianGrid, Cell, Legend, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Bar, BarChart, CartesianGrid, Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import type { CashFlowPoint, CategoryPoint, ComparisonPoint, DashboardFilters } from "../../api/dashboard";
 import { categoryColor, chartColors } from "./chartColors";
 import { DashboardCard } from "./DashboardCard";
@@ -53,19 +53,53 @@ export function CashFlowCard({ data, context, formatMinor, shortDate }: ChartPro
 export function PeriodComparisonCard({ data, context, emptyLabel, formatMinor, shortDate, period, actions }: ChartProps & { data: ComparisonPoint[]; context: string; emptyLabel: string; shortDate: (value: string) => string; period?: ReactNode; actions?: ReactNode }) {
   const totals = data.reduce((result, item) => ({ current: result.current + item.current_minor, previous: result.previous + item.previous_minor, priorYear: result.priorYear + item.prior_year_minor }), { current: 0, previous: 0, priorYear: 0 });
   const series = [
-    { label: "Current", value: totals.current, color: chartColors.current, lineStyle: "solid" as const },
-    { label: "Previous period", value: totals.previous, color: chartColors.previous, lineStyle: "dashed" as const },
-    { label: "Prior year", value: totals.priorYear, color: chartColors.priorYear, lineStyle: "dotted" as const },
+    { label: "Current", value: totals.current, color: chartColors.current },
+    { label: "Previous period", value: totals.previous, color: chartColors.previous },
+    { label: "Prior year", value: totals.priorYear, color: chartColors.priorYear },
   ];
   const isEmpty = data.every((item) => !item.current_minor && !item.previous_minor && !item.prior_year_minor);
-  return <DashboardCard title="Period comparison" description={context} period={period} actions={actions}><dl aria-label="Period comparison totals" className="mb-4 grid gap-x-4 gap-y-3 sm:grid-cols-3" role="list">{series.map((item) => <div className="min-w-0" key={item.label} role="listitem"><dt className="flex items-center gap-2 text-xs font-medium text-muted-foreground"><span aria-hidden="true" className="w-7 shrink-0 border-t-2" style={{ borderColor: item.color, borderTopStyle: item.lineStyle }} />{item.label}</dt><dd className="mt-1 break-words text-sm font-semibold tabular-nums text-foreground">{formatMinor(item.value)}</dd></div>)}</dl>{isEmpty ? <p className="grid h-72 place-items-center text-sm text-muted-foreground">{emptyLabel}</p> : <div className="h-72" aria-hidden="true"><ResponsiveContainer width="100%" height="100%"><LineChart data={data}><CartesianGrid vertical={false} strokeDasharray="3 3" /><XAxis dataKey="label" tickFormatter={shortDate} /><YAxis tickFormatter={(value) => formatMinor(value)} width={72} /><Tooltip formatter={(value) => formatMinor(Number(value))} labelFormatter={(value) => shortDate(String(value))} /><Line isAnimationActive={false} dataKey="current_minor" name="Current" stroke={chartColors.current} strokeWidth={3} dot={false} /><Line isAnimationActive={false} dataKey="previous_minor" name="Previous period" stroke={chartColors.previous} strokeWidth={2} strokeDasharray="7 5" dot={false} /><Line isAnimationActive={false} dataKey="prior_year_minor" name="Prior year" stroke={chartColors.priorYear} strokeWidth={2} strokeDasharray="2 5" dot={false} /></LineChart></ResponsiveContainer></div>}</DashboardCard>;
+  return <DashboardCard title="Period comparison" description={context} period={period} actions={actions}><dl aria-label="Period comparison totals" className="mb-4 flex flex-wrap justify-center gap-x-10 gap-y-3 text-center" role="list">{series.map((item) => <div className="min-w-32" key={item.label} role="listitem"><dt className="flex items-center justify-center gap-2 text-xs font-medium text-muted-foreground"><span aria-hidden="true" className="size-2.5 shrink-0 rounded-sm" style={{ backgroundColor: item.color }} />{item.label}</dt><dd className="mt-1 break-words text-sm font-semibold tabular-nums text-foreground">{formatMinor(item.value)}</dd></div>)}</dl>{isEmpty ? <p className="grid h-72 place-items-center text-sm text-muted-foreground">{emptyLabel}</p> : <div className="h-72" aria-hidden="true"><ResponsiveContainer width="100%" height="100%"><BarChart data={data} barCategoryGap={0} barGap={0} maxBarSize={24}><CartesianGrid vertical={false} strokeDasharray="3 3" /><XAxis dataKey="label" tickFormatter={shortDate} minTickGap={24} /><YAxis tickFormatter={(value) => formatMinor(Number(value))} width={72} /><Tooltip formatter={(value) => formatMinor(Number(value))} labelFormatter={(value) => shortDate(String(value))} /><Bar isAnimationActive={false} dataKey="current_minor" name="Current" fill={chartColors.current} radius={[4, 4, 0, 0]} /><Bar isAnimationActive={false} dataKey="previous_minor" name="Previous period" fill={chartColors.previous} radius={[4, 4, 0, 0]} /><Bar isAnimationActive={false} dataKey="prior_year_minor" name="Prior year" fill={chartColors.priorYear} radius={[4, 4, 0, 0]} /></BarChart></ResponsiveContainer></div>}</DashboardCard>;
 }
 
 export function CategorySpendingCard({ data, context, formatMinor }: ChartProps & { data: CategoryPoint[]; context: string }) {
   return <DashboardCard title="Category spending" description={context}>{data.length === 0 ? <p className="grid h-72 place-items-center text-sm text-muted-foreground">No category spending in this period.</p> : <><div className="h-72" aria-hidden="true"><ResponsiveContainer width="100%" height="100%"><BarChart data={data} layout="vertical" margin={{ left: 20 }}><CartesianGrid horizontal={false} strokeDasharray="3 3" /><XAxis type="number" tickFormatter={(value) => formatMinor(value)} /><YAxis dataKey="name" type="category" width={90} /><Tooltip formatter={(value) => formatMinor(Number(value))} /><Bar isAnimationActive={false} dataKey="amount_minor" name="Expenses" fill={chartColors.expense} radius={[0, 5, 5, 0]} /></BarChart></ResponsiveContainer></div><ul className="mt-3 grid gap-1 text-xs text-muted-foreground" aria-label="Category spending values">{data.map((item) => <li className="flex justify-between gap-3" key={item.name}><span>{item.name}</span><span className="tabular-nums">{formatMinor(item.amount_minor)}</span></li>)}</ul></>}</DashboardCard>;
 }
 
-export function ExpenseStructureCard({ data, formatMinor }: ChartProps & { data: CategoryPoint[] }) {
+export function ExpenseStructureCard({ data, formatMinor, reportHref }: ChartProps & { data: CategoryPoint[]; reportHref?: string }) {
   const total = data.reduce((sum, item) => sum + item.amount_minor, 0);
-  return <DashboardCard title="Expense structure" description="Top five categories and Other">{data.length === 0 ? <p className="grid h-64 place-items-center text-sm text-muted-foreground">No expenses to structure.</p> : <><div className="h-64" aria-hidden="true"><ResponsiveContainer width="100%" height="100%"><PieChart><Pie isAnimationActive={false} data={data} dataKey="amount_minor" nameKey="name" innerRadius={58} outerRadius={92} paddingAngle={2}>{data.map((item) => <Cell key={item.name} fill={categoryColor(item.name)} />)}</Pie><Tooltip formatter={(value) => formatMinor(Number(value))} /><Legend /></PieChart></ResponsiveContainer></div><ul className="mt-3 grid gap-1 text-xs" aria-label="Expense structure values">{data.map((item) => <li className="flex items-center justify-between gap-3" key={item.name}><span className="flex min-w-0 items-center gap-2"><span aria-hidden="true" className="size-2.5 shrink-0 rounded-full" style={{ backgroundColor: categoryColor(item.name) }} />{item.name}</span><span className="shrink-0 tabular-nums text-muted-foreground">{formatMinor(item.amount_minor)} · {total ? Math.round(item.amount_minor / total * 100) : 0}%</span></li>)}</ul></>}</DashboardCard>;
+  const isEmpty = total <= 0;
+  return <DashboardCard title="Expense Breakdown" description="Top five categories and Other">{isEmpty ? <p className="grid h-64 place-items-center text-sm text-muted-foreground">No expenses to structure.</p> : <>
+    <div className="grid min-w-0 items-center gap-6 md:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+      <div className="relative mx-auto size-56 max-w-full">
+        <div className="absolute inset-0" aria-hidden="true" data-testid="expense-breakdown-donut">
+          <ResponsiveContainer width="100%" height="100%">
+            <PieChart>
+              <Pie isAnimationActive={false} data={data} dataKey="amount_minor" nameKey="name" innerRadius={70} outerRadius={104} paddingAngle={2} stroke="none">
+                {data.map((item) => <Cell key={item.name} fill={categoryColor(item.name)} stroke="none" />)}
+              </Pie>
+              <Tooltip formatter={(value) => formatMinor(Number(value))} />
+            </PieChart>
+          </ResponsiveContainer>
+        </div>
+        <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center px-6 text-center">
+          <span className="text-xs font-medium text-muted-foreground">Total Expenses</span>
+          <strong className="mt-1 max-w-full break-words text-xl font-semibold tracking-tight tabular-nums text-foreground">{formatMinor(total)}</strong>
+        </div>
+      </div>
+      <ul className="grid min-w-0 gap-3 text-sm" aria-label="Expense breakdown values">
+        {data.map((item) => {
+          const percentage = Math.round(item.amount_minor / total * 100);
+          return <li aria-label={`${item.name}, ${percentage}%, ${formatMinor(item.amount_minor)}`} className="grid min-w-0 grid-cols-[minmax(0,1fr)_3rem_minmax(5.5rem,auto)] items-start gap-3" key={item.name}>
+            <span className="flex min-w-0 items-start gap-2">
+              <span aria-hidden="true" className="mt-1.5 size-2.5 shrink-0 rounded-full" style={{ backgroundColor: categoryColor(item.name) }} />
+              <span className="min-w-0 whitespace-normal break-words font-medium">{item.name}</span>
+            </span>
+            <span className="text-right tabular-nums text-muted-foreground">{percentage}%</span>
+            <span className="min-w-0 break-words text-right font-medium tabular-nums">{formatMinor(item.amount_minor)}</span>
+          </li>;
+        })}
+      </ul>
+    </div>
+    {reportHref && <a className="mt-5 inline-flex min-h-11 items-center gap-2 text-sm font-semibold text-primary underline-offset-4 hover:underline focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" href={reportHref}>View full report <span aria-hidden="true">→</span></a>}
+  </>}</DashboardCard>;
 }

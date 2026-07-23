@@ -134,8 +134,12 @@ describe("QuickAddDialog", () => {
   it("offers compact reference add controls without optional or verbose General labels", async () => {
     renderDialog();
     await screen.findByLabelText("Amount");
-    expect(screen.getByRole("button", { name: "Add category" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Add tag" })).toBeInTheDocument();
+    const addCategory = screen.getByRole("button", { name: "Add category" });
+    const addTag = screen.getByRole("button", { name: "Add tag" });
+    expect(addCategory).toHaveClass("size-10", "rounded-lg");
+    expect(addTag).toHaveClass("size-10", "rounded-lg");
+    expect(addCategory).not.toHaveClass("rounded-full");
+    expect(addTag).not.toHaveClass("rounded-full");
     expect(screen.queryByText(/optional/i)).not.toBeInTheDocument();
     expect(screen.getByLabelText("Account")).toHaveTextContent("General");
     expect(screen.getByLabelText("Account")).not.toHaveTextContent("no specific account");

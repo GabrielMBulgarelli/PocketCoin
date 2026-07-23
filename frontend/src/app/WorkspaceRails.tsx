@@ -9,6 +9,7 @@ import {
 } from "../api/dashboard";
 import type { PlannedPayment } from "../api/plannedPayments";
 import { getCategories, getTags } from "../api/referenceData";
+import { RecurringPaymentIcon } from "../features/planned-payments/RecurringPaymentIcon";
 import { formatMinor, localDateValue, monthStartValue } from "../lib/format";
 import { queryKeys } from "./queryKeys";
 import { useBackupController } from "./BackupControllerContext";
@@ -137,7 +138,7 @@ export function RightWorkspaceRail({ currency, filtersOpen, locale, onAction, on
       {!budgets.isPending && !credit.isPending && budgetWarnings.length === 0 && creditWarnings.length === 0 && !budgets.isError && !credit.isError ? <p className="text-sm text-muted-foreground">Nothing needs attention.</p> : <ul className="space-y-2 text-sm">{budgetWarnings.map((item) => <li key={`budget-${item.id}`}>{item.category_name} is {money(-item.remaining_minor)} over budget.</li>)}{creditWarnings.map((item) => <li key={`credit-${item.account_id}`}>{item.account_name} utilization is {item.current_percentage}%.</li>)}</ul>}
     </RailCard>
     <RailCard title="Upcoming">
-      {upcoming.isPending ? <p className="text-sm text-muted-foreground" role="status">Loading upcoming…</p> : upcoming.isError ? <button className="text-sm text-destructive" onClick={() => void upcoming.refetch()} type="button">Upcoming unavailable — Retry</button> : upcoming.data.length === 0 ? <p className="text-sm text-muted-foreground">Nothing scheduled in the next 30 days.</p> : <ul className="divide-y text-sm">{upcoming.data.slice(0, 3).map((item) => <li className="py-2" key={item.id}><p className="font-medium">{item.title}</p><p className="text-xs text-muted-foreground">{item.due_date} · {money(item.amount_minor)}</p></li>)}</ul>}
+      {upcoming.isPending ? <p className="text-sm text-muted-foreground" role="status">Loading upcoming…</p> : upcoming.isError ? <button className="text-sm text-destructive" onClick={() => void upcoming.refetch()} type="button">Upcoming unavailable — Retry</button> : upcoming.data.length === 0 ? <p className="text-sm text-muted-foreground">Nothing scheduled in the next 30 days.</p> : <ul className="divide-y text-sm">{upcoming.data.slice(0, 3).map((item) => <li className="py-2" key={item.id}><p className="flex items-center gap-1.5 font-medium"><span>{item.title}</span><RecurringPaymentIcon recurrence={item.recurrence} /></p><p className="text-xs text-muted-foreground">{item.due_date} · {money(item.amount_minor)}</p></li>)}</ul>}
       <a className="mt-3 block text-sm font-medium text-primary" href={routeHref("/budgets", { ...state, planning: "upcoming" })} onClick={onAction}>View Planning upcoming</a>
     </RailCard>
     {workspaceTools && <RailCard title="Workspace tools">

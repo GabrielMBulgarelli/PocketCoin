@@ -10,7 +10,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-function stubApi({ failBackup = false }: { failBackup?: boolean } = {}) {
+function stubApi({ failBackup = false, upcoming = [] }: { failBackup?: boolean; upcoming?: unknown[] } = {}) {
   vi.stubGlobal(
     "fetch",
     vi.fn().mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
@@ -27,6 +27,8 @@ function stubApi({ failBackup = false }: { failBackup?: boolean } = {}) {
                 ? []
                 : url.endsWith("/api/transactions") && init?.method === "POST"
                   ? { id: 99 }
+          : url.includes("/api/dashboard/upcoming-payments")
+            ? upcoming
           : url.includes("/api/dashboard/balance-forecast")
             ? {
                 forecast_start: "2026-07-12",
@@ -105,6 +107,26 @@ function stubApi({ failBackup = false }: { failBackup?: boolean } = {}) {
 }
 
 describe("App", () => {
+  it("shows the recurring marker beside recurring Upcoming titles only", async () => {
+    stubApi({
+      upcoming: [
+        { id: 1, title: "Rent", amount_minor: 80_000, due_date: "2026-07-30", recurrence: "monthly" },
+        { id: 2, title: "Passport renewal", amount_minor: 12_500, due_date: "2026-08-01", recurrence: "none" },
+      ],
+    });
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+
+    render(<QueryClientProvider client={queryClient}><App /></QueryClientProvider>);
+
+    const upcoming = (await screen.findByRole("heading", { name: "Upcoming" })).closest("section");
+    expect(upcoming).not.toBeNull();
+    await within(upcoming!).findByText("Rent");
+    expect(within(upcoming!).getByRole("img", { name: "Recurring monthly" })).toBeInTheDocument();
+    const oneTimeRow = within(upcoming!).getByText("Passport renewal").closest("li");
+    expect(oneTimeRow).not.toBeNull();
+    expect(within(oneTimeRow!).queryByRole("img", { name: /Recurring/ })).not.toBeInTheDocument();
+  });
+
   it("replaces the retired planned-payments route with Planning Upcoming", async () => {
     window.history.replaceState(null, "", "#/planned-payments?financial_account_id=1&month=2026-07&page=2");
     stubApi();

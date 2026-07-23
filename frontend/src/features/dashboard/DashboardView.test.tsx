@@ -92,6 +92,15 @@ describe("DashboardView date-dependent queries", () => {
     await waitFor(() => expect(getBudgetProgress).toHaveBeenCalledWith("2026-12-01", expect.any(AbortSignal)));
   });
 
+  it("keeps the expense breakdown to one desktop grid column", async () => {
+    renderDashboard("#/dashboard?analysis=spending");
+
+    const card = await screen.findByRole("region", { name: "Expense Breakdown" });
+
+    expect(card.parentElement).toHaveClass("xl:col-span-1");
+    expect(card.parentElement).not.toHaveClass("xl:col-span-2");
+  });
+
   it("shows an invalid range and pauses financial queries", async () => {
     renderDashboard("#/dashboard?analysis=cash-flow");
     await waitFor(() => expect(getDashboardEndpoint).toHaveBeenCalled());
@@ -120,22 +129,34 @@ describe("DashboardView date-dependent queries", () => {
     expect(screen.getAllByText(/CRC|₡/).length).toBeGreaterThan(0);
   });
 
-  it("uses the cash-flow table summary instead of the time-series endpoint", async () => {
+  it("loads both the cash-flow summary and the additive comparative chart", async () => {
     renderDashboard("#/dashboard?analysis=cash-flow");
 
     expect(await screen.findByRole("region", { name: "Cash flow" })).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Comparative Bar Chart" })).toBeInTheDocument();
     expect(getDashboardEndpoint).toHaveBeenCalledWith(
       "cash-flow-table",
       expect.any(Object),
       {},
       expect.any(AbortSignal),
     );
-    expect(getDashboardEndpoint).not.toHaveBeenCalledWith(
+    expect(getDashboardEndpoint).toHaveBeenCalledWith(
       "cash-flow",
       expect.any(Object),
-      expect.anything(),
+      {},
       expect.any(AbortSignal),
     );
+  });
+
+  it("shows the shared selected date range without a comparative chart period control", async () => {
+    renderDashboard("#/dashboard?analysis=cash-flow");
+    const card = await screen.findByRole("region", { name: "Comparative Bar Chart" });
+    const from = screen.getByLabelText("From") as HTMLInputElement;
+    const to = screen.getByLabelText("To") as HTMLInputElement;
+    const expectedRange = `${new Intl.DateTimeFormat("es-CR", { day: "numeric", month: "short", year: "numeric" }).format(new Date(`${from.value}T00:00:00`))} – ${new Intl.DateTimeFormat("es-CR", { day: "numeric", month: "short", year: "numeric" }).format(new Date(`${to.value}T00:00:00`))}`;
+
+    expect(within(card).getByText(expectedRange)).toBeInTheDocument();
+    expect(within(card).queryByRole("combobox", { name: "Comparison period" })).not.toBeInTheDocument();
   });
 
   it("defaults period comparison to expenses", async () => {
