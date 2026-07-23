@@ -1,4 +1,4 @@
-export const formatMinor = (value: number, currency: string, locale: string, maximumFractionDigits = 0) => new Intl.NumberFormat(locale, { style: "currency", currency, maximumFractionDigits }).format(value / 100);
+export const formatMinor = (value: number, currency: string, locale: string, maximumFractionDigits = 0) => new Intl.NumberFormat(locale, { style: "currency", currency, currencyDisplay: "narrowSymbol", maximumFractionDigits }).format(value / 100);
 export const formatShortDate = (value: string, locale: string) => new Intl.DateTimeFormat(locale, { month: "short", day: "numeric" }).format(new Date(`${value}T00:00:00`));
 
 const padCalendarPart = (value: number) => String(value).padStart(2, "0");

@@ -2,11 +2,11 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { getCategories, getFinancialAccounts, getTags } from "../../api/referenceData";
+import { getCategories, getFinancialAccounts, getTags, saveCategory, saveTag } from "../../api/referenceData";
 import { createTransaction, createTransfer } from "../../api/transactions";
 import { QuickAddDialog } from "./QuickAddDialog";
 
-vi.mock("../../api/referenceData", () => ({ getCategories: vi.fn(), getFinancialAccounts: vi.fn(), getTags: vi.fn() }));
+vi.mock("../../api/referenceData", () => ({ getCategories: vi.fn(), getFinancialAccounts: vi.fn(), getTags: vi.fn(), saveCategory: vi.fn(), saveTag: vi.fn() }));
 vi.mock("../../api/transactions", () => ({ createTransaction: vi.fn(), createTransfer: vi.fn() }));
 
 const accounts = [{ id: 1, name: "Checking", kind: "checking", opening_balance_minor: 0, opening_balance_date: "2026-01-01", credit_limit_minor: null, is_active: true }];
@@ -36,6 +36,8 @@ describe("QuickAddDialog", () => {
     vi.mocked(getTags).mockResolvedValue(tags);
     vi.mocked(createTransaction).mockResolvedValue({} as Awaited<ReturnType<typeof createTransaction>>);
     vi.mocked(createTransfer).mockResolvedValue({} as Awaited<ReturnType<typeof createTransfer>>);
+    vi.mocked(saveCategory).mockResolvedValue({ id: 12, name: "Travel", direction: "expense", is_default: false, is_active: true });
+    vi.mocked(saveTag).mockResolvedValue({ id: 21, name: "Vacation", is_active: true });
   });
 
   it("does not let a tag lookup failure block an expense", async () => {
@@ -113,5 +115,29 @@ describe("QuickAddDialog", () => {
     expect(screen.getByLabelText("Amount")).toHaveValue(12.5);
     expect(screen.getByLabelText("Description")).toHaveValue("Lunch");
     expect(onOpenChange).not.toHaveBeenCalledWith(false);
+  });
+
+  it("creates and selects a category without losing the Quick Add draft", async () => {
+    renderDialog();
+    fireEvent.change(await screen.findByLabelText("Amount"), { target: { value: "12.50" } });
+    fireEvent.change(screen.getByLabelText("Description"), { target: { value: "Lunch" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add category" }));
+    fireEvent.change(screen.getByLabelText("Category name"), { target: { value: "Travel" } });
+    fireEvent.click(screen.getByRole("button", { name: "Create category" }));
+
+    await waitFor(() => expect(saveCategory).toHaveBeenCalledWith(null, { name: "Travel", direction: "expense" }));
+    expect(screen.getByLabelText("Amount")).toHaveValue(12.5);
+    expect(screen.getByLabelText("Description")).toHaveValue("Lunch");
+    expect(screen.getByLabelText("Category")).toHaveValue("12");
+  });
+
+  it("offers compact reference add controls without optional or verbose General labels", async () => {
+    renderDialog();
+    await screen.findByLabelText("Amount");
+    expect(screen.getByRole("button", { name: "Add category" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Add tag" })).toBeInTheDocument();
+    expect(screen.queryByText(/optional/i)).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Account")).toHaveTextContent("General");
+    expect(screen.getByLabelText("Account")).not.toHaveTextContent("no specific account");
   });
 });

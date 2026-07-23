@@ -18,6 +18,7 @@ import {
   type TransactionTimelineRow,
 } from "../../api/transactions";
 import { queryKeys } from "../../app/queryKeys";
+import { useWorkspaceTools } from "../../app/WorkspaceToolsContext";
 import { useOptionalWorkspaceRoute } from "../../app/WorkspaceRouteContext";
 import { scopeToApiParams } from "../../app/workspaceRouteState";
 import {
@@ -208,11 +209,10 @@ export function TransactionsView({
     (category) => category.direction === editKind,
   );
 
-  return (
-    <section>
-      <div className="rounded-xl border bg-card p-4 shadow-sm">
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <label className="text-xs font-medium text-muted-foreground xl:col-span-2">
+  const filterControls = (
+      <section className="min-w-0" aria-label="Transaction filters">
+        <div className="grid min-w-0 grid-cols-1 gap-3">
+          <label className="text-xs font-medium text-muted-foreground">
             Search
             <input
               className={`${control} mt-1 w-full`}
@@ -284,7 +284,7 @@ export function TransactionsView({
             <option value="transfer_in">Transfers in</option>
           </Filter>
         </div>
-        <div className="mt-3 flex justify-end">
+        <div className="mt-3 grid">
           <Filter
             label="Sort"
             name="sort"
@@ -297,7 +297,12 @@ export function TransactionsView({
             <option value="amount_asc">Smallest amount</option>
           </Filter>
         </div>
-      </div>
+      </section>
+  );
+  const toolsRegistered = useWorkspaceTools({ filters: filterControls });
+  return (
+    <section>
+      {!toolsRegistered && filterControls}
       <div className="mt-5 rounded-xl border bg-card shadow-sm">
         {transactions.isPending ||
         accounts.isPending ||

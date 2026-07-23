@@ -4,8 +4,10 @@ import { getDashboardEndpoint, type CashFlowPoint, type CashFlowTable, type Cate
 import type { BudgetProgress } from "../../api/budgets";
 import { exportTransactions } from "../../api/transactions";
 import { queryKeys } from "../../app/queryKeys";
+import { useWorkspaceTools } from "../../app/WorkspaceToolsContext";
 import { formatMinor, formatShortDate } from "../../lib/format";
 import { useCsvExport } from "../../lib/useCsvExport";
+import { ExportStatusAlert } from "../../components/ExportStatusAlert";
 import { BudgetProgressList } from "../budgets/BudgetProgressCard";
 import { CashFlowCard, CategorySpendingCard, DashboardFiltersControl, ExpenseStructureCard, PeriodComparisonCard } from "../dashboard/DashboardCards";
 import { CashFlowSummaryCard } from "../dashboard/CashFlowSummaryCard";
@@ -43,8 +45,10 @@ export function ReportsView({ currency, locale }: { currency: string; locale: st
   const debtToIncome = useReportSection<DebtToIncome>("debt-to-income", effectiveFilters, validRange);
   const money = (value: number) => formatMinor(value, currency, locale); const shortDate = (value: string) => formatShortDate(value, locale); const period = validRange ? `${shortDate(filters.start_date)} – ${shortDate(filters.end_date)}` : "Adjust the date filters";
   const debtErrors = [credit, creditAccounts, recurringDebts, debtToIncome].filter((item) => item.isError).map((item) => item.error?.message ?? "A debt metric could not be loaded.");
-  return <div className="min-w-0 space-y-5"><DashboardFiltersControl label="Report filters" filters={filters} onChange={setFilters} accounts={accountCatalog} categories={categoryCatalog} tags={tagCatalog} onReset={reset} showAccount={false} />
-    <div className="flex justify-end"><button className="min-h-11 touch-manipulation rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50" type="button" disabled={!validRange || csvExport.status === "exporting"} onClick={() => void csvExport.start(() => exportTransactions(filters))}>{csvExport.status === "exporting" ? "Exporting…" : "Export filtered CSV"}</button></div>{csvExport.message && <p role={csvExport.status === "error" ? "alert" : "status"} aria-live="polite" className={csvExport.status === "error" ? "text-sm text-destructive" : "text-sm text-muted-foreground"}>{csvExport.message}</p>}
+  const filterControls = <DashboardFiltersControl compact label="Report filters" filters={filters} onChange={setFilters} accounts={accountCatalog} categories={categoryCatalog} tags={tagCatalog} onReset={reset} showAccount={false} />;
+  const exportControls = <><div className="flex justify-end"><button className="min-h-11 touch-manipulation rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50" type="button" disabled={!validRange || csvExport.status === "exporting"} onClick={() => void csvExport.start(() => exportTransactions(effectiveFilters))}>{csvExport.status === "exporting" ? "Exporting…" : "Export filtered CSV"}</button></div><ExportStatusAlert status={csvExport.status} message={csvExport.message} /></>;
+  const toolsRegistered = useWorkspaceTools({ filters: filterControls, actions: exportControls });
+  return <div className="min-w-0 space-y-5">{!toolsRegistered && filterControls}{!toolsRegistered && exportControls}
     {!validRange ? <DashboardCard title="Invalid date range" description={period}><p className="py-8 text-sm text-destructive" role="alert">The start date must be on or before the end date. Adjust either date to continue.</p></DashboardCard> : <div className="relative min-w-0">{isUpdating && <p className="absolute inset-x-0 top-8 z-10 text-center text-sm font-medium text-muted-foreground" role="status">Updating filters…</p>}<div aria-hidden={isUpdating || undefined} className={`space-y-5 ${isUpdating ? "invisible" : ""}`}>
       {cashTable.isPending || cashTable.isError ? <SectionState title="Cash-flow statistics" period={period} query={cashTable} /> : <>
         <CashFlowSummaryCard data={cashTable.data} period={<PeriodLabel kind="range" startDate={filters.start_date} endDate={filters.end_date} locale={locale} />} formatMinor={money} />

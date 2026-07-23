@@ -8,16 +8,16 @@ type BackupController = ReturnType<typeof useCreateBackupMutation>;
 
 const BackupControllerContext = createContext<BackupController | null>(null);
 
-function useCreateBackupMutation() {
+function useCreateBackupMutation(onSuccess?: () => void) {
   const client = useQueryClient();
   return useMutation({
     mutationFn: createBackup,
-    onSuccess: () => void client.invalidateQueries({ queryKey: queryKeys.backups }),
+    onSuccess: () => { void client.invalidateQueries({ queryKey: queryKeys.backups }); onSuccess?.(); },
   });
 }
 
-export function BackupControllerProvider({ children }: { children: ReactNode }) {
-  const controller = useCreateBackupMutation();
+export function BackupControllerProvider({ children, onSuccess }: { children: ReactNode; onSuccess?: () => void }) {
+  const controller = useCreateBackupMutation(onSuccess);
   return <BackupControllerContext.Provider value={controller}>{children}</BackupControllerContext.Provider>;
 }
 

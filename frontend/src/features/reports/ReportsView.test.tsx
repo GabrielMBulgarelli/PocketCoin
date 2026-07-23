@@ -169,7 +169,9 @@ describe("ReportsView", () => {
     expect(exportTransactions).toHaveBeenCalledTimes(1);
 
     resolveExport();
-    expect(await screen.findByText("CSV exported successfully.")).toBeInTheDocument();
+    const status = await screen.findByRole("status", { name: "CSV export status" });
+    expect(status).toHaveTextContent("CSV exported successfully.");
+    expect(status).toHaveClass("rounded-lg", "border");
     expect(button).toBeEnabled();
   });
 });

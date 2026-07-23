@@ -93,6 +93,7 @@ class FinancialAccountCreate(BaseModel):
 
 class FinancialAccountUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=120)
+    kind: AccountKind | None = None
     opening_balance_minor: int | None = Field(default=None, ge=0)
     opening_balance_date: date | None = None
     credit_limit_minor: int | None = Field(default=None, gt=0)

@@ -1,143 +1,99 @@
 ```text
-██████╗  ██████╗  ██████╗██╗  ██╗███████╗████████╗
-██╔══██╗██╔═══██╗██╔════╝██║ ██╔╝██╔════╝╚══██╔══╝
-██████╔╝██║   ██║██║     █████╔╝ █████╗     ██║
-██╔═══╝ ██║   ██║██║     ██╔═██╗ ██╔══╝     ██║
-██║     ╚██████╔╝╚██████╗██║  ██╗███████╗   ██║
-╚═╝      ╚═════╝  ╚═════╝╚═╝  ╚═╝╚══════╝   ╚═╝
-
-██████╗ ██████╗ ██╗███╗   ██╗
-██╔════╝██╔═══██╗██║████╗  ██║
-██║     ██║   ██║██║██╔██╗ ██║
-██║     ██║   ██║██║██║╚██╗██║
-╚██████╗╚██████╔╝██║██║ ╚████║
- ╚═════╝ ╚═════╝ ╚═╝╚═╝  ╚═══╝
+██████╗  ██████╗  ██████╗██╗  ██╗███████╗████████╗   ██████╗ ██████╗ ██╗███╗   ██╗
+██╔══██╗██╔═══██╗██╔════╝██║ ██╔╝██╔════╝╚══██╔══╝  ██╔════╝██╔═══██╗██║████╗  ██║
+██████╔╝██║   ██║██║     █████╔╝ █████╗     ██║     ██║     ██║   ██║██║██╔██╗ ██║
+██╔═══╝ ██║   ██║██║     ██╔═██╗ ██╔══╝     ██║     ██║     ██║   ██║██║██║╚██╗██║
+██║     ╚██████╔╝╚██████╗██║  ██╗███████╗   ██║     ╚██████╗╚██████╔╝██║██║ ╚████║
+╚═╝      ╚═════╝  ╚═════╝╚═╝  ╚═╝╚══════╝   ╚═╝      ╚═════╝ ╚═════╝ ╚═╝╚═╝  ╚═══╝
 ```
 
-PocketCoin is a local-first personal finance app for one person. It is designed to help you track accounts, record income and expenses, manage transfers, and inspect your financial activity without accounts, logins, or cloud services.
+# PocketCoin
 
-## Current Status
+PocketCoin is a local-first personal budgeting application for one person. It combines account tracking, transaction management, planning, and financial analysis in a responsive web workspace, with no login or cloud service required.
 
-PocketCoin is a complete local release for day-to-day personal budgeting. It includes:
+![PocketCoin Overview showing cash flow, period comparison, recent activity, and account summaries](assets/pocketcoin-overview.jpg)
 
-- account, category, tag, transaction, transfer, budget, and planned-payment workflows
-- dashboard forecasting and credit/debt analysis
-- bounded CSV import, reports, settings, and spreadsheet-safe CSV export
-- application-controlled backup and validated restore
-- one-process local release serving the built React application from FastAPI
+## Features
 
-## Expected Project Structure
+- Track cash, checking, savings, credit card, overdraft, and loan accounts, including opening balances and credit limits.
+- Record, edit, search, filter, and delete income, expenses, and atomic account transfers.
+- Add categories, tags, notes, debt-payment classification, and weekly, monthly, or yearly recurrence to financial activity.
+- Review posted activity and upcoming recurring entries together in the transaction timeline.
+- Plan monthly category budgets and manage upcoming income, expenses, and debt payments.
+- Analyze balances, forecasts, cash flow, period comparisons, category spending, budget progress, credit utilization, recurring debt, and debt-to-income ratio.
+- Scope Overview, Transactions, and Reports to all accounts, General activity, or one financial account; Planning stays global while preserving the selected scope.
+- Import CSV files through preview, column mapping, validation, duplicate review, and commit steps.
+- Export complete or filtered transaction history as spreadsheet-safe CSV.
+- Configure currency, locale, first day of week, and light, dark, or system theme.
+- Create local backups and perform validated restores from Settings.
+- Use the responsive workspace, keyboard-accessible navigation, contextual rails or sheets, and global Quick Add flow from desktop or compact screens.
 
-The intended architecture organizes the app into a simple frontend/backend split with feature-focused modules:
+## Quick start
 
-```text
-PocketCoin/
-├── backend/
-│   ├── app/
-│   │   ├── main.py
-│   │   ├── config.py
-│   │   ├── database.py
-│   │   ├── models/
-│   │   ├── schemas/
-│   │   ├── routers/
-│   │   ├── services/
-│   │   ├── queries/
-│   │   └── imports/
-│   ├── migrations/
-│   └── tests/
-├── frontend/
-│   ├── src/
-│   │   ├── app/
-│   │   ├── api/
-│   │   ├── components/
-│   │   ├── features/
-│   │   ├── pages/
-│   │   ├── lib/
-│   │   └── types/
-│   └── tests/
-├── docs/
-├── data/
-└── backups/
-```
+Prerequisites: Python 3.12+, [uv](https://docs.astral.sh/uv/), Node.js, and npm.
 
-## Local release
-
-Prerequisites are Python 3.12+, [uv](https://docs.astral.sh/uv/), Node.js, and npm.
-From a fresh clone, install dependencies, migrate and seed the local database, and build the
-frontend with:
+From the repository root, install dependencies, apply migrations, seed reference data, and build the frontend:
 
 ```bash
 make setup
 ```
 
-Start the complete application as one FastAPI/Uvicorn process:
+Start the complete application:
 
 ```bash
 make run
 ```
 
-Open <http://127.0.0.1:8000>. The release server binds only to `127.0.0.1`; the split
-`make dev-backend` and `make dev-frontend` targets remain available for development.
+Open <http://127.0.0.1:8000>. FastAPI serves both the API and the production React bundle from one local process.
 
-## Local data, backup, and restore
+## Local data
 
-By default PocketCoin stores its SQLite database and application-controlled files in `./data`.
-Set `POCKETCOIN_DATA_DIR` before running migration, seed, or the application to use another local
-directory. Backups are stored under `<POCKETCOIN_DATA_DIR>/backups` and are managed from Settings →
-Data safety. Restore accepts only backups already listed there and requires typing `RESTORE`; the
-application creates a retained pre-restore backup automatically.
-
-For isolated setup or destructive verification:
+PocketCoin stores its SQLite database, temporary imports, and managed backups in `./data` by default. Set `POCKETCOIN_DATA_DIR` to use a different local directory:
 
 ```bash
-POCKETCOIN_DATA_DIR=/tmp/pocketcoin-release make setup
-POCKETCOIN_DATA_DIR=/tmp/pocketcoin-release make run
+POCKETCOIN_DATA_DIR=/path/to/pocketcoin-data make setup
+POCKETCOIN_DATA_DIR=/path/to/pocketcoin-data make run
 ```
 
-### Reproducible audit data
+Backups live under `<POCKETCOIN_DATA_DIR>/backups`. Restore is available through **Settings → Data safety**, accepts an existing managed backup, and creates a retained pre-restore backup automatically.
 
-The repository includes a deterministic audit-data generator instead of a committed SQLite
-database. Always point it at a new, isolated directory and choose the date that the manual audit
-will use as its dashboard/report end date:
+## Architecture
 
-```bash
-POCKETCOIN_DATA_DIR=/tmp/pocketcoin-audit \
-AUDIT_REFERENCE_DATE=2026-07-13 \
-make audit-data
-
-POCKETCOIN_DATA_DIR=/tmp/pocketcoin-audit make run
+```mermaid
+flowchart LR
+    browser["React workspace"]
+    subgraph local["PocketCoin · 127.0.0.1"]
+        direction LR
+        api["FastAPI API"] --> services["Financial services"] --> db[("SQLite")]
+        imports["Polars CSV import"] --> services
+        migrations["Alembic migrations"] -.-> db
+    end
+    browser <-->|HTTP / JSON| api
+    classDef quiet fill:none,stroke:#64748b,color:#475569
+    class browser,api,services,imports,db,migrations quiet
+    style local fill:none,stroke:#94a3b8,color:#475569
 ```
 
-The fixture contains recognizable checking, savings, cash, credit-card, and loan accounts;
-income, expense, tagged, and transfer transactions across the preceding 90 days; current-month
-budgets; and pending monthly income, expense, and debt payments. Its currency is CRC and locale is
-`es-CR`. Use the selected reference date as `end_date` to reproduce forecast, budget, report, and
-debt-analysis observations.
+The backend owns financial validation and calculations. The frontend owns presentation, temporary interface state, tables, and Recharts visualizations. Polars handles bounded CSV parsing and transformation. Alembic owns schema migrations.
 
-The target refuses to run without both explicit variables, will not mix the fixture with existing
-transactions or feature data, and is idempotent only for the same reference date. Choose another
-empty directory for a different audit date. The generated database is disposable local evidence
-and must not be committed.
+## Development
 
-## Known limitations
-
-- PocketCoin is a local, single-user application with no authentication or network deployment.
-- Local databases and backups are not encrypted by PocketCoin.
-- Restore supports only backups from the current repository schema revision.
-- Arbitrary restore paths and uploads are intentionally unsupported.
-- Backups have no automatic schedule, deletion, or retention policy.
-
-## Development commands
-
-From the repository root:
+Run the development servers in separate terminals:
 
 ```bash
-make install
-make migrate
-make seed
 make dev-backend
 make dev-frontend
 ```
 
-Run `make check` for lint, strict TypeScript checks, and automated tests; run `make build` for the
-production frontend bundle.
+Validate changes from the repository root:
+
+```bash
+make check   # Ruff, ESLint, strict TypeScript checks, pytest, and Vitest
+make build   # Production frontend build
+```
+
+Additional project commands include `make migrate`, `make seed`, `make test-backend`, and `make test-frontend`.
+
+## License
+
+PocketCoin is licensed under the [MIT License](LICENSE).

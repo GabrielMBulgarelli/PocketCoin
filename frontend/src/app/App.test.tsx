@@ -183,23 +183,41 @@ describe("App", () => {
     expect(screen.queryByText("Failed to fetch")).not.toBeInTheDocument();
   });
 
-  it("traps navigation focus, marks the active route, and restores focus on Escape", async () => {
+  it("shows direct primary navigation and no hamburger menu", async () => {
     stubApi();
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     render(<QueryClientProvider client={queryClient}><App /></QueryClientProvider>);
-    const trigger = screen.getByLabelText("Open navigation menu");
-    fireEvent.click(trigger);
-    const dialog = await screen.findByRole("dialog");
     expect(screen.getByRole("link", { name: "Overview" })).toHaveAttribute("aria-current", "page");
-    await waitFor(() => expect(dialog).toContainElement(document.activeElement as HTMLElement));
-    fireEvent.keyDown(document.activeElement ?? document.body, { key: "Escape" });
-    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
-    expect(trigger).toHaveFocus();
+    expect(screen.queryByLabelText("Open navigation menu")).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Transactions" })).toHaveAttribute("href", "#/transactions");
+  });
 
-    fireEvent.click(trigger);
-    fireEvent.click(await screen.findByRole("link", { name: "Transactions" }));
-    expect(await screen.findByRole("heading", { name: "Transactions" })).toBeInTheDocument();
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  it("aligns the desktop rails and keeps compact workspace tools after the summary cards", async () => {
+    stubApi();
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(<QueryClientProvider client={queryClient}><App /></QueryClientProvider>);
+
+    const contextRail = screen.getByLabelText("Workspace context");
+    const summaryRail = screen.getByLabelText("Workspace summary");
+    expect(contextRail.parentElement).toHaveClass("items-start");
+    expect(contextRail).toHaveClass("xl:top-20");
+    expect(summaryRail).toHaveClass("xl:top-20");
+    for (const rail of [contextRail, summaryRail]) {
+      expect(rail).not.toHaveClass("rounded-2xl", "border", "bg-card", "p-4", "shadow-sm");
+    }
+    expect(summaryRail).toHaveClass("max-h-[calc(100vh-6.25rem)]", "overflow-y-auto");
+
+    expect(await within(summaryRail).findByRole("heading", { name: "Workspace tools" })).toBeInTheDocument();
+    const cardHeadings = within(summaryRail).getAllByRole("heading", { level: 2 });
+    expect(cardHeadings.at(-1)).toHaveTextContent("Workspace tools");
+
+    fireEvent.click(within(summaryRail).getByText("Filters"));
+    await waitFor(() => expect(summaryRail).not.toHaveClass("max-h-[calc(100vh-6.25rem)]", "overflow-y-auto"));
+    expect(summaryRail).toHaveClass("overflow-visible");
+    const filters = within(summaryRail).getByLabelText("Dashboard filters");
+    expect(filters).not.toHaveClass("rounded-xl", "border", "p-4", "shadow-sm");
+    expect(filters.firstElementChild).toHaveClass("grid-cols-1");
+    expect(filters.firstElementChild).not.toHaveClass("sm:grid-cols-2", "xl:grid-cols-4");
   });
 
   it("restores focus to each compact workspace trigger when its sheet closes", async () => {

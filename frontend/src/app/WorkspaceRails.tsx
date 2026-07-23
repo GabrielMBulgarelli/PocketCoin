@@ -13,6 +13,7 @@ import { formatMinor, localDateValue, monthStartValue } from "../lib/format";
 import { queryKeys } from "./queryKeys";
 import { useBackupController } from "./BackupControllerContext";
 import { useWorkspaceRoute } from "./WorkspaceRouteContext";
+import { useRouteWorkspaceTools } from "./WorkspaceToolsContext";
 import {
   resolveEffectiveScope,
   routeHref,
@@ -67,11 +68,13 @@ export function LeftWorkspaceRail({ onAction }: { onAction?: () => void }) {
       </nav>}
       <a className="mt-3 block text-sm font-medium text-primary" href={routeHref("/financial-accounts", state)} onClick={onAction}>Manage accounts</a>
     </RailCard>
-    <RailCard title="Management">
-      <div className="space-y-2">
-        {(["category", "tag"] as const).map((type) => <div className="flex items-center justify-between gap-2" key={type}><a className="min-h-10 flex-1 rounded-lg px-3 py-2 text-sm hover:bg-accent/60" href={routeHref("/categories", state)} onClick={onAction}>{type === "category" ? "Categories" : "Tags"}</a><a aria-label={`Add ${type}`} className="grid size-9 place-items-center rounded-full border bg-background hover:bg-accent" href={routeHref("/categories", { ...state, referenceAction: type })} onClick={onAction}><PlusIcon className="size-4" /></a></div>)}
+    <section className="relative rounded-2xl border bg-card p-4 shadow-sm">
+      <a aria-label="Manage categories and tags" className="absolute inset-0 rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" href={routeHref("/categories", state)} onClick={onAction} />
+      <h2 className="pointer-events-none relative text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">Management</h2>
+      <div className="pointer-events-none relative mt-3 space-y-2">
+        {(["category", "tag"] as const).map((type) => <div className="flex min-h-10 items-center justify-between gap-2 px-3 text-sm" key={type}><span>{type === "category" ? "Categories" : "Tags"}</span><a aria-label={`Add ${type}`} className="pointer-events-auto grid size-9 place-items-center rounded-full border bg-background hover:bg-accent" href={routeHref("/categories", { ...state, referenceAction: type })} onClick={(event) => { event.stopPropagation(); onAction?.(); }}><PlusIcon className="size-4" /></a></div>)}
       </div>
-    </RailCard>
+    </section>
     <RailCard title="Quick tools">
       <div className="grid gap-1 text-sm">
         <a className="rounded-lg px-3 py-2 hover:bg-accent/60" href={routeHref("/import", state)} onClick={onAction}>Import CSV</a>
@@ -79,14 +82,14 @@ export function LeftWorkspaceRail({ onAction }: { onAction?: () => void }) {
         <button className="rounded-lg px-3 py-2 text-left hover:bg-accent/60 disabled:opacity-50" disabled={backup.isPending} onClick={() => backup.mutate(undefined, { onSuccess: onAction })} type="button">{backup.isPending ? "Backing up…" : "Backup data"}</button>
         <a className="rounded-lg px-3 py-2 hover:bg-accent/60" href="#/settings?section=data-safety" onClick={onAction}>Data Safety</a>
         {backup.isError && <p className="px-3 text-xs text-destructive" role="alert">Backup could not be created.</p>}
-        {backup.isSuccess && <p className="px-3 text-xs text-muted-foreground" role="status">Backup created.</p>}
       </div>
     </RailCard>
   </div>;
 }
 
-export function RightWorkspaceRail({ currency, locale, onAction }: { currency: string; locale: string; onAction?: () => void }) {
+export function RightWorkspaceRail({ currency, filtersOpen, locale, onAction, onFiltersOpenChange }: { currency: string; filtersOpen: boolean; locale: string; onAction?: () => void; onFiltersOpenChange: (open: boolean) => void }) {
   const { accounts, state } = useWorkspaceRoute();
+  const workspaceTools = useRouteWorkspaceTools();
   const metadata = routeMetadata[state.path];
   const categories = useQuery({ queryKey: queryKeys.categories, queryFn: ({ signal }) => getCategories(signal), enabled: metadata.rightRail === "references" });
   const tags = useQuery({ queryKey: queryKeys.tags, queryFn: ({ signal }) => getTags(signal), enabled: metadata.rightRail === "references" });
@@ -124,8 +127,8 @@ export function RightWorkspaceRail({ currency, locale, onAction }: { currency: s
   const creditWarnings = credit.data?.filter((item) => item.current_percentage !== null && item.current_percentage >= 30) ?? [];
   return <div className="space-y-4">
     <RailCard title="This month">
-      <p className="mb-3 text-xs text-muted-foreground">{new Intl.DateTimeFormat(locale, { month: "long", day: "numeric", year: "numeric" }).format(new Date(`${today}T12:00:00`))} · <ScopeName scope={state.scope.effective} /></p>
-      {summary.isPending ? <p className="text-sm text-muted-foreground" role="status">Loading summary…</p> : summary.isError ? <button className="text-sm text-destructive" onClick={() => void summary.refetch()} type="button">Summary unavailable — Retry</button> : <dl className="grid gap-2 text-sm">{[["Balance", summary.data.balance_minor], ["Income", summary.data.income_minor], ["Expenses", summary.data.expense_minor], ["Net", summary.data.net_minor]].map(([label, value]) => <div className="flex justify-between gap-3" key={String(label)}><dt>{label}</dt><dd className="font-medium tabular-nums">{money(Number(value))}</dd></div>)}</dl>}
+      <p className="mb-3 text-xs text-muted-foreground">{new Intl.DateTimeFormat("en-US", { month: "long", day: "numeric", year: "numeric" }).format(new Date(`${today}T12:00:00`))} · <ScopeName scope={state.scope.effective} /></p>
+      {summary.isPending ? <p className="text-sm text-muted-foreground" role="status">Loading summary…</p> : summary.isError ? <button className="text-sm text-destructive" onClick={() => void summary.refetch()} type="button">Summary unavailable — Retry</button> : <dl className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">{[["Balance", summary.data.balance_minor], ["Income", summary.data.income_minor], ["Expenses", summary.data.expense_minor], ["Net", summary.data.net_minor]].map(([label, value]) => <div key={String(label)}><dt className="text-xs text-muted-foreground">{label}</dt><dd className="font-medium tabular-nums">{money(Number(value))}</dd></div>)}</dl>}
     </RailCard>
     <RailCard title="Needs attention">
       {(budgets.isPending || credit.isPending) && <p className="text-sm text-muted-foreground" role="status">Checking budgets and credit…</p>}
@@ -137,5 +140,9 @@ export function RightWorkspaceRail({ currency, locale, onAction }: { currency: s
       {upcoming.isPending ? <p className="text-sm text-muted-foreground" role="status">Loading upcoming…</p> : upcoming.isError ? <button className="text-sm text-destructive" onClick={() => void upcoming.refetch()} type="button">Upcoming unavailable — Retry</button> : upcoming.data.length === 0 ? <p className="text-sm text-muted-foreground">Nothing scheduled in the next 30 days.</p> : <ul className="divide-y text-sm">{upcoming.data.slice(0, 3).map((item) => <li className="py-2" key={item.id}><p className="font-medium">{item.title}</p><p className="text-xs text-muted-foreground">{item.due_date} · {money(item.amount_minor)}</p></li>)}</ul>}
       <a className="mt-3 block text-sm font-medium text-primary" href={routeHref("/budgets", { ...state, planning: "upcoming" })} onClick={onAction}>View Planning upcoming</a>
     </RailCard>
+    {workspaceTools && <RailCard title="Workspace tools">
+      {workspaceTools.filters && <details className="group" onToggle={(event) => onFiltersOpenChange(event.currentTarget.open)} open={filtersOpen}><summary className="cursor-pointer text-sm font-medium">Filters</summary><div className="mt-3">{workspaceTools.filters}</div></details>}
+      {workspaceTools.actions && <div className={`${workspaceTools.filters ? "mt-4 " : ""}[&_button]:w-full`}>{workspaceTools.actions}</div>}
+    </RailCard>}
   </div>;
 }

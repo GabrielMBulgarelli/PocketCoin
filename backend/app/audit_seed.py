@@ -154,6 +154,22 @@ def seed_audit_data(session: Session, reference_date: date) -> None:
             name="Audit Debt Payment", direction=CategoryDirection.EXPENSE,
             created_at=created_at, updated_at=created_at,
         ),
+        "utilities": Category(
+            name="Audit Utilities", direction=CategoryDirection.EXPENSE,
+            created_at=created_at, updated_at=created_at,
+        ),
+        "dining": Category(
+            name="Audit Dining", direction=CategoryDirection.EXPENSE,
+            created_at=created_at, updated_at=created_at,
+        ),
+        "health": Category(
+            name="Audit Health", direction=CategoryDirection.EXPENSE,
+            created_at=created_at, updated_at=created_at,
+        ),
+        "entertainment": Category(
+            name="Audit Entertainment", direction=CategoryDirection.EXPENSE,
+            created_at=created_at, updated_at=created_at,
+        ),
     }
     tags = {
         "essential": Tag(name="Audit Essential", created_at=created_at, updated_at=created_at),
@@ -265,6 +281,46 @@ def seed_audit_data(session: Session, reference_date: date) -> None:
             transfer_group_id="00000000-0000-0000-0000-000000000001",
         ),
         _transaction(
+            checking, categories["salary"], reference_date - timedelta(days=11),
+            TransactionKind.INCOME, 1_250_000, "Audit salary July", created_at,
+        ),
+        _transaction(
+            checking, categories["utilities"], reference_date - timedelta(days=10),
+            TransactionKind.EXPENSE, 84_000, "Audit electricity and internet", created_at,
+        ),
+        _transaction(
+            credit, categories["dining"], reference_date - timedelta(days=7),
+            TransactionKind.EXPENSE, 32_500, "Audit dinner", created_at,
+        ),
+        _transaction(
+            checking, categories["health"], reference_date - timedelta(days=5),
+            TransactionKind.EXPENSE, 45_000, "Audit pharmacy", created_at,
+        ),
+        _transaction(
+            cash, categories["entertainment"], reference_date - timedelta(days=3),
+            TransactionKind.EXPENSE, 28_000, "Audit cinema", created_at,
+        ),
+        _transaction(
+            credit, categories["groceries"], reference_date - timedelta(days=39),
+            TransactionKind.EXPENSE, 68_000, "Audit supermarket June", created_at,
+        ),
+        _transaction(
+            credit, categories["groceries"], reference_date - timedelta(days=69),
+            TransactionKind.EXPENSE, 64_500, "Audit supermarket May", created_at,
+        ),
+        _transaction(
+            cash, categories["transport"], reference_date - timedelta(days=35),
+            TransactionKind.EXPENSE, 21_000, "Audit transport June", created_at,
+        ),
+        _transaction(
+            cash, categories["transport"], reference_date - timedelta(days=65),
+            TransactionKind.EXPENSE, 19_500, "Audit transport May", created_at,
+        ),
+        _transaction(
+            checking, categories["freelance"], reference_date - timedelta(days=38),
+            TransactionKind.INCOME, 135_000, "Audit freelance June", created_at,
+        ),
+        _transaction(
             checking,
             categories["groceries"],
             reference_date,
@@ -295,6 +351,14 @@ def seed_audit_data(session: Session, reference_date: date) -> None:
             ),
             Budget(
                 category_id=categories["housing"].id, month=month, limit_minor=450_000,
+                created_at=created_at, updated_at=created_at,
+            ),
+            Budget(
+                category_id=categories["transport"].id, month=month, limit_minor=90_000,
+                created_at=created_at, updated_at=created_at,
+            ),
+            Budget(
+                category_id=categories["utilities"].id, month=month, limit_minor=120_000,
                 created_at=created_at, updated_at=created_at,
             ),
             PlannedPayment(

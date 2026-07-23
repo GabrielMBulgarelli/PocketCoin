@@ -1,11 +1,11 @@
 import { Component, type ErrorInfo, type ReactNode, useEffect, useRef, useState } from "react";
-import { MenuIcon, PanelLeftIcon, PanelRightIcon, PlusIcon } from "lucide-react";
+import { PanelLeftIcon, PanelRightIcon, PlusIcon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 
-import { primaryRoutes, secondaryRoutes } from "./workspaceRouteState";
+import { primaryRoutes } from "./workspaceRouteState";
 import { useWorkspaceRoute } from "./WorkspaceRouteContext";
 import { LeftWorkspaceRail, RightWorkspaceRail } from "./WorkspaceRails";
 
@@ -54,8 +54,7 @@ class RouteErrorBoundary extends Component<{ children: ReactNode; resetKey: stri
 export function WorkspaceShell({ children, currency, feedback, locale, onQuickAdd, outage, status, title }: WorkspaceShellProps) {
   const { state, href, update } = useWorkspaceRoute();
   const [openSheet, setOpenSheet] = useState<"context" | "summary" | null>(null);
-  const [navigationOpen, setNavigationOpen] = useState(false);
-  const navigationTrigger = useRef<HTMLButtonElement>(null);
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const contextTrigger = useRef<HTMLButtonElement>(null);
   const summaryTrigger = useRef<HTMLButtonElement>(null);
 
@@ -64,7 +63,10 @@ export function WorkspaceShell({ children, currency, feedback, locale, onQuickAd
     if (!open) window.setTimeout(() => (sheet === "context" ? contextTrigger : summaryTrigger).current?.focus(), 0);
   };
 
-  useEffect(() => setOpenSheet(null), [state.path]);
+  useEffect(() => {
+    setOpenSheet(null);
+    setFiltersOpen(false);
+  }, [state.path]);
 
   const planningMode = state.planning ?? "budgets";
   const routeResetKey = `${state.path}:${window.location.hash}`;
@@ -75,16 +77,10 @@ export function WorkspaceShell({ children, currency, feedback, locale, onQuickAd
         Skip to main content
       </a>
       <header className="sticky top-0 z-40 border-b bg-background/95 shadow-sm backdrop-blur">
-        <div className="mx-auto flex max-w-[112rem] items-center gap-2 px-3 py-3 sm:px-5">
-          <a className="mr-auto text-lg font-semibold tracking-tight" href={href("/dashboard")}>PocketCoin</a>
-          <Button className="hidden xl:inline-flex" size="sm" variant="ghost" asChild><a href={href("/settings")}>Settings</a></Button>
-          <Button aria-label="Quick add" className="rounded-full" size="icon" onClick={onQuickAdd}><PlusIcon /></Button>
-          <Button ref={navigationTrigger} aria-label="Open navigation menu" className="rounded-full" size="icon" variant="outline" onClick={() => setNavigationOpen(true)}><MenuIcon /></Button>
-          <Button ref={contextTrigger} aria-label="Open context panel" className="rounded-full xl:hidden" size="icon" variant="outline" onClick={() => setWorkspaceSheet("context", true)}><PanelLeftIcon /></Button>
-          <Button ref={summaryTrigger} aria-label="Open summary panel" className="rounded-full xl:hidden" size="icon" variant="outline" onClick={() => setWorkspaceSheet("summary", true)}><PanelRightIcon /></Button>
-        </div>
-        <nav aria-label="Primary financial views" className="mx-auto flex max-w-[112rem] gap-1 overflow-x-auto px-3 pb-3 sm:px-5">
-          {primaryRoutes.map((route) => (
+        <div className="mx-auto grid max-w-[112rem] grid-cols-[1fr_auto] items-center gap-2 px-3 py-3 sm:px-5 md:grid-cols-[1fr_auto_1fr]">
+          <a className="text-lg font-semibold tracking-tight" href={href("/dashboard")}>PocketCoin</a>
+          <nav aria-label="Primary financial views" className="order-3 col-span-2 flex gap-1 overflow-x-auto pt-2 md:order-none md:col-span-1 md:justify-center md:pt-0">
+            {primaryRoutes.map((route) => (
             <a
               key={route.path}
               href={href(route.path)}
@@ -93,8 +89,15 @@ export function WorkspaceShell({ children, currency, feedback, locale, onQuickAd
             >
               {route.primaryLabel ?? route.title}
             </a>
-          ))}
-        </nav>
+            ))}
+          </nav>
+          <div className="flex items-center justify-end gap-2">
+            <Button size="sm" variant="ghost" asChild><a href={href("/settings")}>Settings</a></Button>
+            <Button aria-label="Quick add" className="rounded-full" size="icon" onClick={onQuickAdd}><PlusIcon /></Button>
+            <Button ref={contextTrigger} aria-label="Open context panel" className="rounded-full xl:hidden" size="icon" variant="outline" onClick={() => setWorkspaceSheet("context", true)}><PanelLeftIcon /></Button>
+            <Button ref={summaryTrigger} aria-label="Open summary panel" className="rounded-full xl:hidden" size="icon" variant="outline" onClick={() => setWorkspaceSheet("summary", true)}><PanelRightIcon /></Button>
+          </div>
+        </div>
       </header>
 
       {outage ? (
@@ -104,8 +107,8 @@ export function WorkspaceShell({ children, currency, feedback, locale, onQuickAd
       ) : null}
       {feedback ? <p className="sr-only" role="status" aria-live="polite">{feedback}</p> : null}
 
-      <div className="mx-auto grid max-w-[112rem] gap-5 px-3 py-5 sm:px-5 xl:grid-cols-[16rem_minmax(0,1fr)_18rem]">
-        <aside className="hidden max-h-[calc(100vh-9rem)] overflow-y-auto rounded-2xl border bg-card p-4 shadow-sm xl:sticky xl:top-32 xl:block" aria-label="Workspace context">
+      <div className="mx-auto grid max-w-[112rem] items-start gap-5 px-3 py-5 sm:px-5 xl:grid-cols-[16rem_minmax(0,1fr)_18rem]">
+        <aside className="hidden max-h-[calc(100vh-6.25rem)] overflow-y-auto xl:sticky xl:top-20 xl:block" aria-label="Workspace context">
           <LeftWorkspaceRail />
         </aside>
         <main id="main-content" className="min-w-0" tabIndex={-1}>
@@ -127,8 +130,8 @@ export function WorkspaceShell({ children, currency, feedback, locale, onQuickAd
           <h1 className="sr-only">{title}</h1>
           <RouteErrorBoundary resetKey={routeResetKey}>{children}</RouteErrorBoundary>
         </main>
-        <aside className="hidden max-h-[calc(100vh-9rem)] overflow-y-auto rounded-2xl border bg-card p-4 shadow-sm xl:sticky xl:top-32 xl:block" aria-label="Workspace summary">
-          <RightWorkspaceRail currency={currency} locale={locale} />
+        <aside className={cn("hidden xl:sticky xl:top-20 xl:block", filtersOpen ? "overflow-visible" : "max-h-[calc(100vh-6.25rem)] overflow-y-auto")} aria-label="Workspace summary">
+          <RightWorkspaceRail currency={currency} filtersOpen={filtersOpen} locale={locale} onFiltersOpenChange={setFiltersOpen} />
         </aside>
       </div>
 
@@ -141,25 +144,7 @@ export function WorkspaceShell({ children, currency, feedback, locale, onQuickAd
       <Sheet open={openSheet === "summary"} onOpenChange={(open) => setWorkspaceSheet("summary", open)}>
         <SheetContent side="right" className="overflow-y-auto">
           <SheetHeader><SheetTitle>Summary</SheetTitle><SheetDescription>Status and supporting financial information.</SheetDescription></SheetHeader>
-          <div className="mt-5"><RightWorkspaceRail currency={currency} locale={locale} onAction={() => setWorkspaceSheet("summary", false)} /></div>
-        </SheetContent>
-      </Sheet>
-      <Sheet open={navigationOpen} onOpenChange={(open) => { setNavigationOpen(open); if (!open) window.setTimeout(() => navigationTrigger.current?.focus(), 0); }}>
-        <SheetContent side="right">
-          <SheetHeader><SheetTitle>Navigation</SheetTitle><SheetDescription>Open a PocketCoin workspace or management view.</SheetDescription></SheetHeader>
-          <nav aria-label="Application navigation" className="mt-5 grid gap-2">
-            {[...primaryRoutes, ...secondaryRoutes].map((route) => (
-              <a
-                key={route.path}
-                href={href(route.path)}
-                aria-current={state.path === route.path ? "page" : undefined}
-                className={cn("rounded-lg px-4 py-3 text-sm font-medium hover:bg-muted", state.path === route.path && "bg-muted")}
-                onClick={() => setNavigationOpen(false)}
-              >
-                {route.title}
-              </a>
-            ))}
-          </nav>
+          <div className="mt-5"><RightWorkspaceRail currency={currency} filtersOpen={filtersOpen} locale={locale} onAction={() => setWorkspaceSheet("summary", false)} onFiltersOpenChange={setFiltersOpen} /></div>
         </SheetContent>
       </Sheet>
     </div>

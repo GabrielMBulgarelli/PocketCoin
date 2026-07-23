@@ -40,7 +40,7 @@ export function MetricSelector({
               />
               <label
                 htmlFor={inputId}
-                className="flex min-h-11 cursor-pointer touch-manipulation items-center justify-center rounded-md px-2.5 text-xs font-semibold text-muted-foreground transition-colors hover:bg-background/70 hover:text-foreground peer-checked:bg-background peer-checked:text-foreground peer-checked:shadow-xs peer-focus-visible:ring-2 peer-focus-visible:ring-ring sm:px-3"
+                className="flex min-h-11 cursor-pointer touch-manipulation items-center justify-center rounded-md px-2.5 text-xs font-semibold text-muted-foreground transition-colors hover:bg-background/70 hover:text-foreground peer-checked:bg-primary peer-checked:text-primary-foreground peer-checked:shadow-xs peer-focus-visible:ring-2 peer-focus-visible:ring-ring sm:px-3"
               >
                 {optionLabel}
               </label>

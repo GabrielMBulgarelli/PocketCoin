@@ -34,25 +34,27 @@ function Donut({
   value,
   remainder,
   label,
+  large = false,
 }: {
   value: number;
   remainder: number;
   label: string;
+  large?: boolean;
 }) {
   const data = [
     { name: label, value },
     { name: "Remaining", value: Math.max(remainder, 0) },
   ];
   return (
-    <div className="h-44" aria-hidden="true">
+    <div className={large ? "h-64" : "h-44"} aria-hidden="true">
       <ResponsiveContainer width="100%" height="100%">
         <PieChart>
           <Pie
             isAnimationActive={false}
             data={data}
             dataKey="value"
-            innerRadius={48}
-            outerRadius={70}
+            innerRadius={large ? 68 : 48}
+            outerRadius={large ? 98 : 70}
           >
             {data.map((item, index) => (
               <Cell
@@ -147,6 +149,7 @@ export function CreditDebtSection({
                   {overall.utilization_percentage}%
                 </p>
                 <Donut
+                  large
                   value={overall.outstanding_debt_minor}
                   remainder={
                     overall.total_credit_limit_minor -
@@ -301,32 +304,32 @@ export function CreditDebtSection({
                   remainder={dti.gross_income_minor - dti.monthly_debt_minor}
                   label="Monthly debt payments"
                 />
-                <div className="grid grid-cols-2 gap-3 text-sm">
-                  <p>
-                    <span className="block text-xs text-muted-foreground">
+                <dl className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
+                  <div>
+                    <dt className="text-xs text-muted-foreground">
                       Recurring debt
-                    </span>
-                    {formatMinor(dti.recurring_debt_minor)}
-                  </p>
-                  <p>
-                    <span className="block text-xs text-muted-foreground">
+                    </dt>
+                    <dd>{formatMinor(dti.recurring_debt_minor)}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-muted-foreground">
                       Additional debt
-                    </span>
-                    {formatMinor(dti.additional_debt_minor)}
-                  </p>
-                  <p>
-                    <span className="block text-xs text-muted-foreground">
+                    </dt>
+                    <dd>{formatMinor(dti.additional_debt_minor)}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-muted-foreground">
                       Monthly debt
-                    </span>
-                    {formatMinor(dti.monthly_debt_minor)}
-                  </p>
-                  <p>
-                    <span className="block text-xs text-muted-foreground">
+                    </dt>
+                    <dd>{formatMinor(dti.monthly_debt_minor)}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-muted-foreground">
                       Gross income
-                    </span>
-                    {formatMinor(dti.gross_income_minor)}
-                  </p>
-                </div>
+                    </dt>
+                    <dd>{formatMinor(dti.gross_income_minor)}</dd>
+                  </div>
+                </dl>
               </>
             )}
           </DashboardCard>

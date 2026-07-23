@@ -20,9 +20,10 @@ import { routeMetadata, type RoutePath } from "./workspaceRouteState";
 import { WorkspaceShell } from "./WorkspaceShell";
 import type { Settings } from "../api/settings";
 import { BackupControllerProvider } from "./BackupControllerContext";
+import { WorkspaceToolsProvider } from "./WorkspaceToolsContext";
 
 export function App() {
-  return <WorkspaceRouteProvider><BackupControllerProvider><AppRuntime /></BackupControllerProvider></WorkspaceRouteProvider>;
+  return <WorkspaceRouteProvider><AppRuntime /></WorkspaceRouteProvider>;
 }
 
 function AppRuntime() {
@@ -96,10 +97,10 @@ function AppRuntime() {
   const activeSelectedAccount = selectedAccount?.is_active ? String(selectedAccount.id) : "";
   const quickAddAccountId = activeSelectedAccount;
   const quickAddTransferSourceId = routeState.account.kind === "general" ? "general" : activeSelectedAccount;
-  return <WorkspaceShell currency={currency} feedback={feedback} locale={locale} onQuickAdd={() => { setFeedback(""); setQuickAddOpen(true); }} outage={apiHealth === "unavailable"} status={status} title={title}>
+  return <WorkspaceToolsProvider><BackupControllerProvider onSuccess={() => setFeedback("Backup created successfully.")}><WorkspaceShell currency={currency} feedback={feedback} locale={locale} onQuickAdd={() => { setFeedback(""); setQuickAddOpen(true); }} outage={apiHealth === "unavailable"} status={status} title={title}>
     <RouteOutlet currency={currency} locale={locale} path={path} settings={settingsQuery.data} settingsError={settingsQuery.isError} settingsLoading={settingsQuery.isPending} />
     <QuickAddDialog defaultAccountId={quickAddAccountId} defaultTransferSourceId={quickAddTransferSourceId} open={quickAddOpen} onOpenChange={setQuickAddOpen} onCreated={setFeedback} />
-  </WorkspaceShell>;
+  </WorkspaceShell></BackupControllerProvider></WorkspaceToolsProvider>;
 }
 
 function RouteOutlet({ currency, locale, path, settings, settingsError, settingsLoading }: { currency: string; locale: string; path: RoutePath; settings?: Settings; settingsError: boolean; settingsLoading: boolean }) {

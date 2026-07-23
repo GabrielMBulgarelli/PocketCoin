@@ -20,7 +20,7 @@ function CatalogSelect({ label, value, catalog, allLabel, generalLabel, onChange
   </select></label>;
 }
 
-export function DashboardFiltersControl({ filters, onChange, accounts, categories, tags, onReset, label = "Dashboard filters", showAccount = true }: { filters: DashboardFilters; onChange: (filters: DashboardFilters) => void; accounts: CatalogState; categories: CatalogState; tags: CatalogState; onReset: () => void; label?: string; showAccount?: boolean }) {
+export function DashboardFiltersControl({ filters, onChange, accounts, categories, tags, onReset, compact = false, label = "Dashboard filters", showAccount = true }: { filters: DashboardFilters; onChange: (filters: DashboardFilters) => void; accounts: CatalogState; categories: CatalogState; tags: CatalogState; onReset: () => void; compact?: boolean; label?: string; showAccount?: boolean }) {
   const update = (key: keyof DashboardFilters, value: string) => onChange({ ...filters, [key]: value ? (key.endsWith("_id") ? Number(value) : value) : undefined } as DashboardFilters);
   const updateAccount = (value: string) => onChange({
     ...filters,
@@ -28,17 +28,17 @@ export function DashboardFiltersControl({ filters, onChange, accounts, categorie
     without_account: value === "general" ? true : undefined,
   });
   const failures = [["accounts", accounts], ["categories", categories], ["tags", tags]].filter(([, catalog]) => (catalog as CatalogState).isError);
-  return <section className="min-w-0 rounded-xl border bg-card p-4 shadow-sm" aria-label={label}>
-    <div className={`grid min-w-0 gap-3 sm:grid-cols-2 ${showAccount ? "xl:grid-cols-5" : "xl:grid-cols-4"}`}>
+  return <section className={compact ? "min-w-0" : "min-w-0 rounded-xl border bg-card p-4 shadow-sm"} aria-label={label}>
+    <div className={compact ? "grid min-w-0 grid-cols-1 gap-3" : `grid min-w-0 gap-3 sm:grid-cols-2 ${showAccount ? "xl:grid-cols-5" : "xl:grid-cols-4"}`}>
       <label className="grid min-w-0 gap-1 text-xs font-medium text-muted-foreground">From<input className={control} type="date" value={filters.start_date} onChange={(event) => update("start_date", event.target.value)} /></label>
       <label className="grid min-w-0 gap-1 text-xs font-medium text-muted-foreground">To<input className={control} type="date" value={filters.end_date} onChange={(event) => update("end_date", event.target.value)} /></label>
       {showAccount && <CatalogSelect label="Account" value={filters.without_account ? "general" : filters.financial_account_id} catalog={accounts} allLabel="All accounts" generalLabel="General — no specific account" onChange={updateAccount} />}
       <CatalogSelect label="Category" value={filters.category_id} catalog={categories} allLabel="All categories" onChange={(value) => update("category_id", value)} />
       <CatalogSelect label="Tag" value={filters.tag_id} catalog={tags} allLabel="All tags" onChange={(value) => update("tag_id", value)} />
     </div>
-    <div className="mt-3 flex min-w-0 flex-wrap items-center justify-between gap-3">
+    <div className={`mt-3 min-w-0 gap-3 ${compact ? "grid" : "flex flex-wrap items-center justify-between"}`}>
       {failures.length > 0 ? <div className="flex min-w-0 flex-wrap items-center gap-3 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm" role="alert" aria-label="Filter data unavailable"><span>{failures.map(([name]) => name).join(", ")} unavailable. Existing results remain visible.</span><button type="button" className="min-h-11 rounded-lg border bg-background px-3 font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" onClick={() => failures.forEach(([, catalog]) => (catalog as CatalogState).retry())}>Retry filter data</button></div> : <span />}
-      <button type="button" className="min-h-11 rounded-lg border bg-background px-3 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" onClick={onReset}>Reset filters</button>
+      <button type="button" className={`min-h-11 rounded-lg border bg-background px-3 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${compact ? "w-full" : ""}`} onClick={onReset}>Reset filters</button>
     </div>
   </section>;
 }
@@ -52,8 +52,13 @@ export function CashFlowCard({ data, context, formatMinor, shortDate }: ChartPro
 
 export function PeriodComparisonCard({ data, context, emptyLabel, formatMinor, shortDate, period, actions }: ChartProps & { data: ComparisonPoint[]; context: string; emptyLabel: string; shortDate: (value: string) => string; period?: ReactNode; actions?: ReactNode }) {
   const totals = data.reduce((result, item) => ({ current: result.current + item.current_minor, previous: result.previous + item.previous_minor, priorYear: result.priorYear + item.prior_year_minor }), { current: 0, previous: 0, priorYear: 0 });
+  const series = [
+    { label: "Current", value: totals.current, color: chartColors.current, lineStyle: "solid" as const },
+    { label: "Previous period", value: totals.previous, color: chartColors.previous, lineStyle: "dashed" as const },
+    { label: "Prior year", value: totals.priorYear, color: chartColors.priorYear, lineStyle: "dotted" as const },
+  ];
   const isEmpty = data.every((item) => !item.current_minor && !item.previous_minor && !item.prior_year_minor);
-  return <DashboardCard title="Period comparison" description={context} period={period} actions={actions}><p className="mb-3 text-xs text-muted-foreground">Current total {formatMinor(totals.current)} · previous period {formatMinor(totals.previous)} · prior year {formatMinor(totals.priorYear)}</p>{isEmpty ? <p className="grid h-72 place-items-center text-sm text-muted-foreground">{emptyLabel}</p> : <div className="h-72" aria-hidden="true"><ResponsiveContainer width="100%" height="100%"><LineChart data={data}><CartesianGrid vertical={false} strokeDasharray="3 3" /><XAxis dataKey="label" tickFormatter={shortDate} /><YAxis tickFormatter={(value) => formatMinor(value)} width={72} /><Tooltip formatter={(value) => formatMinor(Number(value))} /><Legend /><Line isAnimationActive={false} dataKey="current_minor" name="Current" stroke={chartColors.current} strokeWidth={2} dot={false} /><Line isAnimationActive={false} dataKey="previous_minor" name="Previous" stroke={chartColors.previous} dot={false} /><Line isAnimationActive={false} dataKey="prior_year_minor" name="Prior year" stroke={chartColors.priorYear} dot={false} /></LineChart></ResponsiveContainer></div>}</DashboardCard>;
+  return <DashboardCard title="Period comparison" description={context} period={period} actions={actions}><dl aria-label="Period comparison totals" className="mb-4 grid gap-x-4 gap-y-3 sm:grid-cols-3" role="list">{series.map((item) => <div className="min-w-0" key={item.label} role="listitem"><dt className="flex items-center gap-2 text-xs font-medium text-muted-foreground"><span aria-hidden="true" className="w-7 shrink-0 border-t-2" style={{ borderColor: item.color, borderTopStyle: item.lineStyle }} />{item.label}</dt><dd className="mt-1 break-words text-sm font-semibold tabular-nums text-foreground">{formatMinor(item.value)}</dd></div>)}</dl>{isEmpty ? <p className="grid h-72 place-items-center text-sm text-muted-foreground">{emptyLabel}</p> : <div className="h-72" aria-hidden="true"><ResponsiveContainer width="100%" height="100%"><LineChart data={data}><CartesianGrid vertical={false} strokeDasharray="3 3" /><XAxis dataKey="label" tickFormatter={shortDate} /><YAxis tickFormatter={(value) => formatMinor(value)} width={72} /><Tooltip formatter={(value) => formatMinor(Number(value))} labelFormatter={(value) => shortDate(String(value))} /><Line isAnimationActive={false} dataKey="current_minor" name="Current" stroke={chartColors.current} strokeWidth={3} dot={false} /><Line isAnimationActive={false} dataKey="previous_minor" name="Previous period" stroke={chartColors.previous} strokeWidth={2} strokeDasharray="7 5" dot={false} /><Line isAnimationActive={false} dataKey="prior_year_minor" name="Prior year" stroke={chartColors.priorYear} strokeWidth={2} strokeDasharray="2 5" dot={false} /></LineChart></ResponsiveContainer></div>}</DashboardCard>;
 }
 
 export function CategorySpendingCard({ data, context, formatMinor }: ChartProps & { data: CategoryPoint[]; context: string }) {

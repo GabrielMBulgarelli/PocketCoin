@@ -1,6 +1,23 @@
 import { describe, expect, it } from "vitest";
 
-import { localDateValue, localMonthValue, monthStartValue } from "./format";
+import { formatMinor, localDateValue, localMonthValue, monthStartValue } from "./format";
+
+describe("currency formatting", () => {
+  it("uses the narrow Dollar symbol", () => {
+    const formatted = formatMinor(12345, "USD", "es-CR", 2);
+
+    expect(formatted).toContain("$");
+    expect(formatted).not.toContain("USD");
+    expect(formatted).not.toContain("US$");
+  });
+
+  it("uses the Euro symbol", () => {
+    const formatted = formatMinor(12345, "EUR", "es-CR", 2);
+
+    expect(formatted).toContain("€");
+    expect(formatted).not.toContain("EUR");
+  });
+});
 
 describe("local calendar values", () => {
   it("keeps the Costa Rica calendar date during local evening hours", () => {

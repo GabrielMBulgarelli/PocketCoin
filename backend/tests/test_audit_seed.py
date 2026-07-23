@@ -34,6 +34,10 @@ def test_audit_seed_is_deterministic_and_idempotent(session) -> None:
     )
 
     assert first_counts == second_counts
-    assert first_counts[0] > 0
-    assert first_counts[1] > 0
+    assert first_counts[0] >= 20
+    assert first_counts[1] >= 4
     assert first_counts[2] > 0
+    budget_categories = session.scalars(select(Budget.category_id)).all()
+    budget_months = set(session.scalars(select(Budget.month)).all())
+    assert len(set(budget_categories)) == len(budget_categories)
+    assert budget_months == {reference_date.replace(day=1)}

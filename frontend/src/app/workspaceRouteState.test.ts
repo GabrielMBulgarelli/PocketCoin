@@ -71,7 +71,10 @@ describe("workspace route state", () => {
   });
 
   it("normalizes default and unknown modes", () => {
-    expect(canonicalizeWorkspaceHash("#/dashboard?analysis=forecast&activity=expenses").hash).toBe("#/dashboard");
+    const defaultOverview = canonicalizeWorkspaceHash("#/dashboard?analysis=cash-flow&activity=expenses");
+    expect(defaultOverview.state.analysis).toBe("cash-flow");
+    expect(defaultOverview.hash).toBe("#/dashboard");
+    expect(canonicalizeWorkspaceHash("#/dashboard?analysis=forecast").hash).toBe("#/dashboard?analysis=forecast");
     expect(canonicalizeWorkspaceHash("#/dashboard?analysis=nope&activity=all").hash).toBe("#/dashboard");
     expect(canonicalizeWorkspaceHash("#/budgets?planning=budgets").hash).toBe("#/budgets");
     expect(canonicalizeWorkspaceHash("#/reports?metric=nope").hash).toBe("#/reports");

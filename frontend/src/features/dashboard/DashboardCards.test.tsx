@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import { ExpenseStructureCard, PeriodComparisonCard } from "./DashboardCards";
@@ -15,8 +15,13 @@ describe("dashboard chart alternatives", () => {
       shortDate={(value) => value}
     />);
 
-    expect(screen.getByText(/Current total \$100/)).toBeInTheDocument();
-    expect(screen.getByText(/previous period \$80/)).toBeInTheDocument();
+    const summary = screen.getByRole("list", { name: "Period comparison totals" });
+    expect(within(summary).getByText("Current")).toBeInTheDocument();
+    expect(within(summary).getByText("$100")).toBeInTheDocument();
+    expect(within(summary).getByText("Previous period")).toBeInTheDocument();
+    expect(within(summary).getByText("$80")).toBeInTheDocument();
+    expect(within(summary).getByText("Prior year")).toBeInTheDocument();
+    expect(within(summary).getByText("$70")).toBeInTheDocument();
   });
 
   it("shows category values and percentages as text", () => {

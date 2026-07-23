@@ -13,7 +13,7 @@ import { useOptionalWorkspaceRoute } from "../../app/WorkspaceRouteContext";
 import { PlannedPaymentsView } from "../planned-payments/PlannedPaymentsView";
 
 const currentMonth = localMonthValue;
-const control = "h-10 rounded-lg border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring";
+const control = "h-10 rounded-lg border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground";
 
 export function BudgetsView({ currency, locale }: { currency: string; locale: string }) {
   const client = useQueryClient();

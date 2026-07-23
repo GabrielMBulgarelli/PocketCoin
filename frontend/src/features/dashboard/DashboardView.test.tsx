@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { getDashboardEndpoint } from "../../api/dashboard";
@@ -63,6 +63,26 @@ describe("DashboardView date-dependent queries", () => {
   });
   afterEach(() => vi.clearAllMocks());
 
+  it("opens Cash Flow as the first and default Overview analysis", async () => {
+    renderDashboard();
+
+    const navigation = screen.getByRole("navigation", { name: "Financial analysis" });
+    expect(within(navigation).getAllByRole("button").map((button) => button.textContent)).toEqual([
+      "Cash Flow",
+      "Forecast",
+      "Spending",
+      "Debt",
+    ]);
+    expect(within(navigation).getByRole("button", { name: "Cash Flow" })).toHaveAttribute("aria-current", "page");
+    expect(await screen.findByRole("region", { name: "Cash flow" })).toBeInTheDocument();
+  });
+
+  it("honors an explicit Forecast Overview deep link", async () => {
+    renderDashboard("#/dashboard?analysis=forecast");
+
+    expect(await screen.findByRole("region", { name: "Balance forecast" })).toBeInTheDocument();
+  });
+
   it("loads budget progress for the month selected by end date", async () => {
     renderDashboard("#/dashboard?analysis=spending");
     await waitFor(() => expect(getDashboardEndpoint).toHaveBeenCalled());
@@ -122,6 +142,7 @@ describe("DashboardView date-dependent queries", () => {
     renderDashboard("#/dashboard?analysis=cash-flow");
 
     expect(await screen.findByRole("radio", { name: "Expenses" })).toBeChecked();
+    expect(screen.getByText("Expenses compared with previous period and prior year")).toBeInTheDocument();
     await waitFor(() => expect(getDashboardEndpoint).toHaveBeenCalledWith(
       "period-comparison",
       expect.any(Object),
@@ -136,6 +157,7 @@ describe("DashboardView date-dependent queries", () => {
 
     fireEvent.click(income);
 
+    expect(screen.getByText("Income compared with previous period and prior year")).toBeInTheDocument();
     await waitFor(() => expect(getDashboardEndpoint).toHaveBeenCalledWith(
       "period-comparison",
       expect.any(Object),
@@ -149,7 +171,7 @@ describe("DashboardView date-dependent queries", () => {
       .mockRejectedValueOnce(new Error("accounts failed"))
       .mockResolvedValue([{ id: 3, name: "Checking", kind: "checking", opening_balance_minor: 0, opening_balance_date: "2026-01-01", credit_limit_minor: null, is_active: true }]);
 
-    renderDashboard();
+    renderDashboard("#/dashboard?analysis=forecast");
 
     expect(await screen.findByRole("alert", { name: "Filter data unavailable" })).toHaveTextContent("accounts");
     expect(screen.queryByLabelText("Account")).not.toBeInTheDocument();

@@ -139,7 +139,7 @@ function serializeState(path: RoutePath, state: WorkspaceRouteState): string {
     if (state.tagId) params.set("tag", String(state.tagId));
   }
   if (path === "/dashboard") {
-    if (state.analysis !== "forecast") params.set("analysis", state.analysis);
+    if (state.analysis !== "cash-flow") params.set("analysis", state.analysis);
     if (state.activity !== "expenses") params.set("activity", state.activity);
   }
   if (path === "/budgets") {
@@ -177,7 +177,7 @@ export function canonicalizeWorkspaceHash(rawHash: string, accounts?: AccountAva
     categoryId: positiveInteger(params.get("category")),
     tagId: positiveInteger(params.get("tag")),
     month: validMonth(params.get("month")) ? params.get("month")! : undefined,
-    analysis: enumValue(params.get("analysis"), analysisModes, "forecast"),
+    analysis: enumValue(params.get("analysis"), analysisModes, "cash-flow"),
     activity: enumValue(params.get("activity"), activityModes, "expenses"),
     planning: compatibility ? "upcoming" : enumValue(params.get("planning"), planningModes, "budgets"),
     metric: enumValue(params.get("metric"), reportMetrics, "cash_flow"),

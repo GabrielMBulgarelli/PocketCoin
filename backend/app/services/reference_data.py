@@ -186,26 +186,27 @@ def update_financial_account(
             "Edit or cancel it first.",
             "is_active",
         )
-    if "name" in values:
-        account.name = normalized_name(str(values["name"]))
-    for field in {
-        "opening_balance_minor",
-        "opening_balance_date",
-        "credit_limit_minor",
-        "is_active",
-    }:
-        if field in values:
-            setattr(account, field, values[field])
-    validate_account_input(
-        AccountInput(
-            name=account.name,
-            kind=account.kind,
-            opening_balance_minor=account.opening_balance_minor,
-            opening_balance_date=account.opening_balance_date,
-            credit_limit_minor=account.credit_limit_minor,
-            is_active=account.is_active,
-        )
+    next_kind = AccountKind(values.get("kind", account.kind))
+    next_credit_limit = values.get("credit_limit_minor", account.credit_limit_minor)
+    if next_kind not in {AccountKind.CREDIT_CARD, AccountKind.OVERDRAFT}:
+        next_credit_limit = None
+    prospective = AccountInput(
+        name=normalized_name(str(values["name"])) if "name" in values else account.name,
+        kind=next_kind,
+        opening_balance_minor=int(
+            values.get("opening_balance_minor", account.opening_balance_minor)
+        ),
+        opening_balance_date=values.get("opening_balance_date", account.opening_balance_date),
+        credit_limit_minor=next_credit_limit,
+        is_active=bool(values.get("is_active", account.is_active)),
     )
+    name, kind = validate_account_input(prospective)
+    account.name = name
+    account.kind = kind
+    account.opening_balance_minor = prospective.opening_balance_minor
+    account.opening_balance_date = prospective.opening_balance_date
+    account.credit_limit_minor = prospective.credit_limit_minor
+    account.is_active = prospective.is_active
     session.flush()
     return account
 
