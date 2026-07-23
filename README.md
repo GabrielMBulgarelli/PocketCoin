@@ -2,7 +2,7 @@
 
 PocketCoin is a local-first personal budgeting application. It combines account tracking, transaction management, planning, and financial analysis in a responsive web workspace, with no login or cloud service required.
 
-![PocketCoin Overview showing cash flow, period comparison, recent activity, and account summaries](assets/pocketcoin-overview.jpg)
+![PocketCoin Overview in the light theme showing cash flow, period comparison, recent activity, and account summaries](assets/pocketcoin-overview-light.png)
 
 ## Features
 
